@@ -15,6 +15,7 @@ export PYTHONPATH=$PYTHONPATH:/app:/opt/render/project/src
 # Print environment info
 echo "Starting on $HOST:$PORT"
 echo "Debug mode: $DEBUG"
+echo "Python path: $PYTHONPATH"
 
-# Start the application
-exec python -m uvicorn app.main:app --host $HOST --port $PORT
+# Start the application with gunicorn
+exec gunicorn -c gunicorn.conf.py main:app
