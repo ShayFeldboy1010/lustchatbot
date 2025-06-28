@@ -1,0 +1,594 @@
+/* LustBot - Modern Chat Interface - Red, White & Black Theme */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary: #dc2626;        /* Bold red - main brand color */
+    --primary-dark: #991b1b;   /* Dark red */
+    --primary-light: #ef4444;  /* Light red */
+    --secondary: #fecaca;      /* Very light red/pink for highlights */
+    --accent: #fee2e2;         /* Subtle red accent */
+    --background: #000000;     /* Pure black background */
+    --surface: #1a1a1a;       /* Dark gray for containers */
+    --surface-light: #2a2a2a; /* Lighter gray for elevated elements */
+    --text-primary: #ffffff;   /* Pure white text */
+    --text-secondary: #f8f8f8; /* Off-white */
+    --text-muted: #b0b0b0;     /* Light gray text */
+    --border: #333333;         /* Dark border */
+    --success: #dc2626;        /* Red for success (brand consistency) */
+    --warning: #dc2626;        /* Red for warnings */
+    --error: #991b1b;          /* Dark red for errors */
+    --gradient: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    --gradient-light: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+    --shadow: 0 8px 32px rgba(220, 38, 38, 0.25);
+    --shadow-lg: 0 16px 48px rgba(220, 38, 38, 0.3);
+    --glow: 0 0 20px rgba(220, 38, 38, 0.4);
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--background);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    line-height: 1.6;
+    direction: rtl; /* Hebrew RTL support */
+}
+
+.chat-container {
+    width: 100%;
+    max-width: 420px;
+    height: 600px;
+    background: var(--surface);
+    border-radius: 24px;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+/* Header */
+.chat-header {
+    background: var(--gradient);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--primary);
+    box-shadow: var(--glow);
+    position: relative;
+}
+
+.chat-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+    animation: shine 3s infinite;
+}
+
+.brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.logo-icon {
+    font-size: 24px;
+    animation: pulse 2s infinite;
+    filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
+}
+
+.brand-logo h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    position: relative;
+    z-index: 1;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse 2s infinite;
+}
+
+/* Messages */
+.chat-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: var(--surface-light);
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 3px;
+}
+
+.message {
+    display: flex;
+    gap: 12px;
+    animation: slideInFromLeft 0.4s ease-out;
+    opacity: 0;
+    animation-fill-mode: forwards;
+}
+
+.message.user-message {
+    flex-direction: row-reverse;
+    animation: slideInFromRight 0.4s ease-out;
+    animation-fill-mode: forwards;
+}
+
+.message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    background: var(--surface-light);
+    border: 2px solid var(--border);
+}
+
+.user-message .message-avatar {
+    background: var(--gradient);
+    color: white;
+    border-color: var(--primary);
+}
+
+.message-content {
+    flex: 1;
+    max-width: 75%;
+}
+
+.message-text {
+    background: var(--surface-light);
+    padding: 12px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+    direction: rtl; /* RTL for Hebrew text */
+    text-align: right; /* Right-align text */
+}
+
+.user-message .message-text {
+    background: var(--gradient);
+    color: white;
+    border-color: var(--primary);
+}
+
+.message-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    padding: 0 4px;
+}
+
+/* Typing Indicator */
+.typing-indicator {
+    padding: 0 20px 10px;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px;
+    background: var(--surface-light);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    width: fit-content;
+}
+
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    animation: typing 1.4s infinite;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: 0ms; }
+.typing-dots span:nth-child(2) { animation-delay: 200ms; }
+.typing-dots span:nth-child(3) { animation-delay: 400ms; }
+
+/* Input */
+.chat-input-container {
+    padding: 20px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.chat-input {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 4px;
+    transition: border-color 0.3s ease;
+    direction: rtl; /* RTL support for input container */
+}
+
+.chat-input:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1);
+}
+
+#messageInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 12px 16px;
+    color: var(--text-primary);
+    font-size: 14px;
+    resize: none;
+    max-height: 100px;
+    direction: rtl; /* RTL for Hebrew text */
+    text-align: right; /* Right-align Hebrew text */
+}
+
+#messageInput::placeholder {
+    color: var(--text-muted);
+}
+
+#sendButton {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: var(--gradient);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+}
+
+#sendButton::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+#sendButton:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: var(--glow);
+    animation: glow 2s infinite;
+}
+
+#sendButton:hover:not(:disabled)::before {
+    left: 100%;
+}
+
+#sendButton:disabled {
+    background: var(--surface-light);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    animation: none;
+}
+
+.input-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    text-align: center;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 400px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: var(--surface-light);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 20px 24px 24px;
+}
+
+.modal-body p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.form-group input {
+    width: 100%;
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1);
+}
+
+.form-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.submit-btn {
+    width: 100%;
+    background: var(--gradient);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 8px;
+}
+
+.submit-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(233, 30, 99, 0.3);
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    30% {
+        transform: translateY(-8px);
+        opacity: 1;
+    }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    body {
+        padding: 0;
+    }
+    
+    .chat-container {
+        height: 100vh;
+        border-radius: 0;
+        max-width: none;
+    }
+    
+    .chat-header {
+        padding: 16px 20px;
+    }
+    
+    .brand-logo h1 {
+        font-size: 18px;
+    }
+    
+    .chat-messages {
+        padding: 16px;
+    }
+    
+    .chat-input-container {
+        padding: 16px;
+    }
+}
+
+/* Product Cards (for search results) */
+.product-card {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 8px 0;
+    transition: all 0.3s ease;
+}
+
+.product-card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(233, 30, 99, 0.1);
+}
+
+.product-name {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 8px;
+}
+
+.product-price {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.product-description {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.product-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--primary);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.product-link:hover {
+    color: var(--primary-light);
+}
+
+/* Animations */
+@keyframes shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+@keyframes glow {
+    0%, 100% { box-shadow: var(--shadow); }
+    50% { box-shadow: var(--glow); }
+}
+
+@keyframes slideInFromRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInFromLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}

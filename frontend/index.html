@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LustBot - עוזר קניות חכם</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="brand-logo">
+                <span class="logo-icon">🔥</span>
+                <h1>LustBot</h1>
+            </div>
+            <div class="status-indicator online">
+                <span class="status-dot"></span>
+                <span class="status-text">מחובר</span>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="message-text">
+                        שלום! אני LustBot 🔥 העוזר החכם שלכם לקניית בשמי פרומונים. 
+                        איך אני יכול לעזור לכם למצוא משהו מיוחד היום?
+                    </div>
+                    <div class="message-time">עכשיו</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator" style="display: none;">
+            <div class="message bot-message">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <div class="chat-input">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="שאלו אותי על מוצרים, קבלו המלצות..." 
+                    maxlength="500"
+                    autocomplete="off"
+                >
+                <button id="sendButton" type="button" disabled>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m22 2-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Lead Capture Modal -->
+    <div class="modal-overlay" id="leadModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>💌 Get Personal Assistance</h3>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Our luxury consultants would love to help you personally. Leave your details and we'll be in touch!</p>
+                <form id="leadForm">
+                    <div class="form-group">
+                        <label for="leadName">Name *</label>
+                        <input type="text" id="leadName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="leadEmail">Email *</label>
+                        <input type="email" id="leadEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="leadPhone">Phone</label>
+                        <input type="tel" id="leadPhone">
+                    </div>
+                    <div class="form-group">
+                        <label for="leadProduct">What interests you? *</label>
+                        <input type="text" id="leadProduct" required placeholder="e.g., Silk lingerie, massage oils...">
+                    </div>
+                    <button type="submit" class="submit-btn">Send My Details 💕</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/script.js"></script>
+</body>
+</html>

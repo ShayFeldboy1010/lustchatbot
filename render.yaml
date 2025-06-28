@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: lustbot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: ./start.sh
+    envVars:
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_ENVIRONMENT
+        value: us-east-1-aws
+      - key: PINECONE_INDEX_NAME
+        value: lust-products
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: GOOGLE_SHEETS_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /opt/render/project/src/creds/sheets.json
+    autoDeploy: true
