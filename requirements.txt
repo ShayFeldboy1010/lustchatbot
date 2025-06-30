@@ -6,7 +6,7 @@ gunicorn==21.2.0
 
 # AI and ML
 openai>=1.0.0
-pinecone-client>=3.0.0
+pinecone-client==3.2.2
 
 # Data processing
 pandas>=2.0.0

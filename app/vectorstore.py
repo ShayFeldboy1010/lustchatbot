@@ -1,5 +1,5 @@
 import pandas as pd
-from pinecone import Pinecone as PineconeClient, ServerlessSpec
+from pinecone import Pinecone, ServerlessSpec
 from agno.embedder.openai import OpenAIEmbedder
 from typing import List, Optional, Dict, Any
 import os
@@ -27,7 +27,7 @@ class LustVectorStore:
             api_key=settings.openai_api_key
         )
         self.index_name = settings.pinecone_index_name
-        self.pinecone_client: Optional[PineconeClient] = None
+        self.pinecone_client: Optional[Pinecone] = None
         self.index = None
         self.vectorstore = None
         self._initialize_pinecone()
@@ -35,7 +35,7 @@ class LustVectorStore:
     def _initialize_pinecone(self):
         """Initialize Pinecone connection"""
         try:
-            self.pinecone_client = PineconeClient(api_key=settings.pinecone_api_key)
+            self.pinecone_client = Pinecone(api_key=settings.pinecone_api_key)
             
             # Check if index exists, if not create it
             existing_indexes = [index.name for index in self.pinecone_client.list_indexes()]
