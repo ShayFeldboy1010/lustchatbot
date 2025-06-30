@@ -14,7 +14,7 @@ timeout = 30
 keepalive = 30
 
 # Application
-module = "app:app"
+module = "main:app"
 
 # Logging
 accesslog = "-"
