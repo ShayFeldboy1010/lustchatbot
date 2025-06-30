@@ -7,7 +7,7 @@ import os
 class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
-    openai_model: str = "gpt-4o"
+    openai_model: str = "gpt-3.5-turbo"
     
     # Pinecone
     pinecone_api_key: Optional[str] = Field(None, env="PINECONE_API_KEY")
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     sheet_id: Optional[str] = Field(None, env="GOOGLE_SHEET_ID")  # Legacy support
     
     # Agent Settings
-    agent_model: str = "gpt-4o"
+    agent_model: str = "gpt-3.5-turbo"
     agent_temperature: float = 0.7
     
     # App Settings
