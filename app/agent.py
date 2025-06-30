@@ -109,9 +109,9 @@ When a customer expresses interest in purchasing, follow this exact sequence:
 STEP 1: Ask payment method
 "איך אתה מעדיף לשלם – בכרטיס אשראי, ביט או מזומן?"
 
-STEP 2A: IF customer chooses "ביט" or "מזומן" (Bit/Cash):
-Explain the pricing difference:
-"💸 שים לב – מחירי ביט ומזומן שונים ממחירי כרטיס אשראי:
+STEP 2A: IF customer chooses "מזומן" (Cash):
+Explain the pricing difference for cash only:
+"💸 שים לב – מחירי מזומן שונים ממחירי כרטיס אשראי וביט:
 
 👨 לגברים:
 • פריט אחד – 230₪
