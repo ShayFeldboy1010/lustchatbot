@@ -291,6 +291,15 @@ class LustBot {
 document.addEventListener('DOMContentLoaded', () => {
     window.lustBot = new LustBot();
     
+    // Add welcome message
+    const welcomeMessage = `🔥 שלום! אני LustBot!
+
+העוזר החכם שלכם לקניית בשמי פרומונים.
+
+איך אני יכול לעזור לכם למצוא משהו מיוחד היום?`;
+    
+    window.lustBot.addMessage(welcomeMessage, 'bot');
+    
     // Add some helpful quick actions
     const quickActions = [
         'Show me silk products',

@@ -29,7 +29,7 @@
 }
 
 body {
-    font-family: 'Heebo', 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', 'Poppins', 'Heebo', 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--background);
     color: var(--text-primary);
     min-height: 100vh;
@@ -39,7 +39,8 @@ body {
     padding: 20px;
     line-height: 1.6;
     direction: rtl; /* Hebrew RTL support */
-    font-weight: 400;
+    font-weight: 300;
+    font-size: 16px;
 }
 
 .chat-container {
@@ -93,12 +94,12 @@ body {
 }
 
 .brand-logo h1 {
-    font-size: 20px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 500;
     color: white;
     text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    font-family: 'Heebo', 'Rubik', sans-serif;
-    letter-spacing: 0.5px;
+    font-family: 'Inter', 'Poppins', 'Heebo', sans-serif;
+    letter-spacing: 0.3px;
 }
 
 .status-indicator {
@@ -151,6 +152,8 @@ body {
     animation: slideInFromLeft 0.4s ease-out;
     opacity: 0;
     animation-fill-mode: forwards;
+    font-family: 'Inter', 'Poppins', sans-serif;
+    font-weight: 400;
 }
 
 .message.user-message {
@@ -195,7 +198,7 @@ body {
     white-space: pre-wrap; /* Preserve newlines and spaces */
     direction: rtl; /* RTL for Hebrew text */
     text-align: right; /* Right-align text */
-    font-family: 'Heebo', 'Rubik', sans-serif;
+    font-family: 'Inter', 'Poppins', 'Heebo', sans-serif;
 }
 
 .user-message .message-text {
@@ -270,7 +273,7 @@ body {
     padding: 12px 16px;
     color: var(--text-primary);
     font-size: 15px;
-    font-family: 'Heebo', 'Rubik', sans-serif;
+    font-family: 'Inter', 'Poppins', 'Heebo', sans-serif;
     font-weight: 400;
     resize: none;
     min-height: 40px;
