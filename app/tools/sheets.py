@@ -3,6 +3,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import logging
 import os
+import json
 from typing import Optional
 from ..settings import settings
 
@@ -27,15 +28,28 @@ class GoogleSheetsClient:
                 'https://www.googleapis.com/auth/drive'
             ]
             
-            logger.info(f"Using credentials file: {settings.google_sheets_credentials_path}")
+            # Try to get credentials from environment variable first (for Render)
+            google_creds_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
             
-            if not os.path.exists(settings.google_sheets_credentials_path):
-                raise FileNotFoundError(f"Credentials file not found: {settings.google_sheets_credentials_path}")
-            
-            creds = ServiceAccountCredentials.from_json_keyfile_name(
-                settings.google_sheets_credentials_path, 
-                scope
-            )
+            if google_creds_json:
+                logger.info("Using credentials from environment variable")
+                try:
+                    creds_dict = json.loads(google_creds_json)
+                    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON credentials: {e}")
+                    raise
+            else:
+                # Fallback to file-based credentials (for local development)
+                logger.info(f"Using credentials file: {settings.google_sheets_credentials_path}")
+                
+                if not os.path.exists(settings.google_sheets_credentials_path):
+                    raise FileNotFoundError(f"Credentials file not found: {settings.google_sheets_credentials_path}")
+                
+                creds = ServiceAccountCredentials.from_json_keyfile_name(
+                    settings.google_sheets_credentials_path, 
+                    scope
+                )
             
             logger.info("Service account credentials loaded successfully")
             

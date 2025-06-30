@@ -94,6 +94,9 @@ DEBUG=False
    - Check for typos in variable names
 
 3. **Google Sheets Issues**
+   - For Render deployment, set `GOOGLE_APPLICATION_CREDENTIALS_JSON` environment variable
+   - Copy the ENTIRE content of your service account JSON file (including curly braces)
+   - Example: `{"type": "service_account", "project_id": "your-project", "private_key_id": "...", ...}`
    - Verify service account has access to the spreadsheet
    - Check that the spreadsheet ID is correct
 

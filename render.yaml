@@ -19,6 +19,8 @@ services:
         sync: false
       - key: GOOGLE_SHEETS_SPREADSHEET_ID
         sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS_JSON
+        sync: false
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: /opt/render/project/src/creds/sheets.json
     autoDeploy: true
