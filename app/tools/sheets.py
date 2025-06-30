@@ -22,6 +22,7 @@ class GoogleSheetsClient:
         """Initialize Google Sheets client"""
         try:
             logger.info("Attempting to initialize Google Sheets client...")
+            logger.info(f"Available environment variables: {[k for k in os.environ.keys() if 'GOOGLE' in k]}")
             
             scope = [
                 'https://spreadsheets.google.com/feeds',
@@ -31,16 +32,24 @@ class GoogleSheetsClient:
             # Try to get credentials from environment variable first (for Render)
             google_creds_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
             
+            logger.info(f"GOOGLE_APPLICATION_CREDENTIALS_JSON found: {bool(google_creds_json)}")
             if google_creds_json:
+                logger.info(f"Credentials JSON length: {len(google_creds_json)}")
+                logger.info(f"Credentials JSON starts with: {google_creds_json[:50]}...")
+            
+            if google_creds_json and google_creds_json.strip():
                 logger.info("Using credentials from environment variable")
                 try:
                     creds_dict = json.loads(google_creds_json)
                     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+                    logger.info("Successfully created credentials from JSON")
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse JSON credentials: {e}")
+                    logger.error(f"JSON content preview: {google_creds_json[:200]}...")
                     raise
             else:
                 # Fallback to file-based credentials (for local development)
+                logger.warning(f"No JSON credentials found in environment, falling back to file")
                 logger.info(f"Using credentials file: {settings.google_sheets_credentials_path}")
                 
                 if not os.path.exists(settings.google_sheets_credentials_path):
@@ -55,8 +64,12 @@ class GoogleSheetsClient:
             
             self.client = gspread.authorize(creds)
             
-            # Use the new sheets_id from settings
-            sheet_id = settings.google_sheets_id or settings.sheet_id
+            # Use the sheet ID from settings - check multiple possible env var names
+            sheet_id = (settings.google_sheets_id or 
+                       settings.sheet_id or 
+                       os.getenv('GOOGLE_SHEETS_SPREADSHEET_ID') or
+                       os.getenv('GOOGLE_SHEET_ID'))
+            
             if not sheet_id:
                 raise ValueError("No Google Sheets ID configured")
                 
