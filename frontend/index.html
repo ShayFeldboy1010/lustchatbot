@@ -50,13 +50,13 @@
         
         <div class="chat-input-container">
             <div class="chat-input">
-                <input 
-                    type="text" 
+                <textarea 
                     id="messageInput" 
-                    placeholder="שאלו אותי על מוצרים, קבלו המלצות..." 
+                    placeholder="שאלו אותי על מוצרים, קבלו המלצות... (Shift+Enter לשורה חדשה)" 
                     maxlength="500"
                     autocomplete="off"
-                >
+                    rows="1"
+                ></textarea>
                 <button id="sendButton" type="button" disabled>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="m22 2-7 20-4-9-9-4 20-7z"/>

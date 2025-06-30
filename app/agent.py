@@ -79,19 +79,24 @@ Conversation Style & Tone
 Operational Playbooks
 
 1. Handling Customer Callback Requests:
-If a customer asks to be contacted later, wants to be called back, or requests to leave details for follow-up, you MUST collect their information and save it using the `capture_lead` tool:
+If a customer asks to be contacted later, wants to be called back, or requests to leave details for follow-up WITHOUT making an immediate purchase, you MUST collect their information and save it using the `save_callback_request` tool:
 
 REQUIRED INFORMATION for callback requests:
 - שם מלא (Full Name) 
 - מספר טלפון (Phone Number)
-- כתובת אימייל (Email - optional but preferred)
-- בקשה ספציפית (Specific request - write "בקשה לחזרה" or what they're interested in)
+- כתובת אימייל (Email - optional but helpful)
+
+Example scenarios for `save_callback_request`:
+- "Can someone call me back later?"
+- "I want to think about it, save my details"
+- "Can I get more information by phone?"
+- "I'm not ready to buy now but interested"
 
 Example responses:
 - "בוודאי! אני אשמור את הפרטים שלך ואחד מנציגי המכירות יחזור אליך. אני צריך את השם המלא ומספר הטלפון שלך."
 - "אין בעיה לחזור אליך! רק תן לי את הפרטים שלך ונחזור אליך במהרה."
 
-After collecting the information, use `capture_lead` tool with the request type as "בקשה לחזרה" and mention: "הפרטים נשמרו בהצלחה! נחזור אליך בהקדם."
+After collecting the information, use `save_callback_request` tool.
 
 2. Handling Typos:
 If a user writes a misspelled word (e.g., "פורמנים" instead of "פרומונים"), do not immediately say you don't understand. Gently clarify first:
@@ -136,6 +141,13 @@ Ask for each missing piece of information one by one until you have:
 
 Once you have ALL information, use the `capture_lead` tool immediately.
 
+CRITICAL: Use `capture_lead` ONLY when customer:
+- Wants to make an immediate purchase with Bit/Cash payment
+- Has provided ALL required information (name, email, phone, address, product, payment method, shipping type)
+- Is ready to complete the order now
+
+Do NOT use `capture_lead` for callback requests or customers who just want information.
+
 STEP 2C: IF customer chooses "כרטיס אשראי" (Credit Card):
 "מצוין! תוכל לרכוש את הבושם שבחרת בצורה מאובטחת דרך האתר שלנו. 
 
@@ -168,7 +180,8 @@ class LustBotTools(Toolkit):
         tools = [
             self.vector_search,
             self.website_scrape, 
-            self.capture_lead
+            self.capture_lead,
+            self.save_callback_request
         ]
         super().__init__(name="lustbot_tools", tools=tools, **kwargs)
 
@@ -279,13 +292,60 @@ class LustBotTools(Toolkit):
             
             logger.info(f"Lead captured successfully: {name} - {email} - {product}")
             
-            shipping_info = "אקספרס (יום עסקים אחד)" if shipping_type.lower() in ["express", "אקספרס"] else "רגיל (2-5 ימי עסקים)"
-            
-            return f"תודה רבה {name}! קיבלתי את ההזמנה שלך עבור {product} 🎉\n\nפרטי ההזמנה:\n• אמצעי תשלום: {payment_method}\n• סוג משלוח: {shipping_info}\n\nהצוות שלנו יצור איתך קשר בקרוב לאישור הפרטים וקביעת זמן המשלוח.\n\nמספר טלפון לפניות: 0584616973"
+            return f"תודה {name}! ההזמנה שלך נקלטה בהצלחה.\n\nפרטי ההזמנה:\n📱 {product}\n💳 {payment_method}\n📦 משלוח {shipping_type}\n\nנציג מכירות יצור איתך קשר בהקדם לאישור ההזמנה ופרטי המשלוח. אנחנו כאן בשבילך! 😊"
             
         except Exception as e:
-            logger.error(f"Lead capture failed: {e}")
-            return f"מצטער, לא הצלחתי לשמור את הפרטים. אנא נסה שוב או צור קשר ישירות בטלפון 0584616973."
+            logger.error(f"Error capturing lead: {e}")
+            return "אירעה שגיאה בשמירת הפרטים. אנא נסה שוב או צור קשר ישירות."
+
+    def save_callback_request(self, name: str = "", phone: str = "", email: str = "", interest: str = "בקשה לחזרה") -> str:
+        """
+        Save customer details for callback requests.
+        Use this tool when customer asks to be contacted later or wants callback.
+        Only name and phone are required - email is optional.
+        
+        Args:
+            name: Customer's full name (required)
+            phone: Customer's phone number (required)
+            email: Customer's email address (optional)
+            interest: What they're interested in (default: "בקשה לחזרה")
+        """
+        try:
+            # Validate required fields - only name and phone are required
+            missing_fields = []
+            if not name.strip(): missing_fields.append("שם מלא")
+            if not phone.strip(): missing_fields.append("מספר טלפון")
+            
+            if missing_fields:
+                return f"אני צריך עוד כמה פרטים כדי לשמור את הבקשה שלך:\n{', '.join(missing_fields)}\n\nאנא ספק את הפרטים החסרים."
+            
+            # Save to Google Sheets with minimal required fields
+            try:
+                # Use default email if not provided
+                email_value = email.strip() if email and email.strip() else "לא סופק"
+                
+                sheet_result = append_lead(
+                    name=name.strip(), 
+                    email=email_value, 
+                    phone=phone.strip(), 
+                    product=interest, 
+                    method="צ'אט בוט - בקשה לחזרה",
+                    address="לא נדרש",
+                    payment_method="לא רלוונטי", 
+                    shipping_type="לא רלוונטי"
+                )
+                logger.info(f"Callback request saved to sheets: {name} - {phone}")
+            except Exception as e:
+                logger.error(f"Failed to save callback request to sheets: {e}")
+                return "אירעה שגיאה בשמירת הפרטים. אנא נסה שוב או צור קשר ישירות."
+            
+            logger.info(f"Callback request captured successfully: {name} - {phone}")
+            
+            return f"תודה {name}! הפרטים שלך נשמרו בהצלחה.\n\nנחזור אליך בהקדם במספר {phone}.\n\nתודה שפנית אלינו! 😊"
+            
+        except Exception as e:
+            logger.error(f"Error saving callback request: {e}")
+            return "אירעה שגיאה בשמירת הפרטים. אנא נסה שוב או צור קשר ישירות."
 
 
 def create_agent() -> Agent:

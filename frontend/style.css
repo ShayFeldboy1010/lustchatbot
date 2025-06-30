@@ -188,6 +188,7 @@ body {
     font-size: 14px;
     line-height: 1.5;
     word-wrap: break-word;
+    white-space: pre-wrap; /* Preserve newlines and spaces */
     direction: rtl; /* RTL for Hebrew text */
     text-align: right; /* Right-align text */
 }
@@ -265,9 +266,14 @@ body {
     color: var(--text-primary);
     font-size: 14px;
     resize: none;
-    max-height: 100px;
+    min-height: 40px;
+    max-height: 120px;
+    overflow-y: auto;
     direction: rtl; /* RTL for Hebrew text */
     text-align: right; /* Right-align Hebrew text */
+    line-height: 1.4;
+    white-space: pre-wrap; /* Preserve newlines and spaces */
+    word-wrap: break-word;
 }
 
 #messageInput::placeholder {

@@ -28,11 +28,19 @@ class LustBot {
         // Send button click
         this.sendButton.addEventListener('click', () => this.sendMessage());
         
-        // Enter key to send
+        // Enter key to send (Shift+Enter for new line)
         this.messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.sendMessage();
+            }
+        });
+        
+        // Auto-expand textarea on Shift+Enter
+        this.messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.shiftKey) {
+                // Allow the newline to be added, then auto-resize
+                setTimeout(() => this.autoResize(), 0);
             }
         });
         
