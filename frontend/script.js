@@ -28,19 +28,11 @@ class LustBot {
         // Send button click
         this.sendButton.addEventListener('click', () => this.sendMessage());
         
-        // Enter key to send (Shift+Enter for new line)
+        // Enter key to send
         this.messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter') {
                 e.preventDefault();
                 this.sendMessage();
-            }
-        });
-        
-        // Auto-expand textarea on Shift+Enter
-        this.messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && e.shiftKey) {
-                // Allow the newline to be added, then auto-resize
-                setTimeout(() => this.autoResize(), 0);
             }
         });
         
@@ -172,8 +164,8 @@ class LustBot {
         const urlRegex = /(https?:\/\/[^\s]+)/g;
         text = text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener">$1</a>');
         
-        // Convert newlines to <br>
-        text = text.replace(/\n/g, '<br>');
+        // Remove newlines - let text flow naturally
+        text = text.replace(/\n/g, ' ');
         
         // Look for product information patterns and format them
         // This is a simple example - you can enhance this based on your product response format

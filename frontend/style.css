@@ -195,7 +195,7 @@ body {
     font-weight: 400;
     line-height: 1.5;
     word-wrap: break-word;
-    white-space: pre-wrap; /* Preserve newlines and spaces */
+    white-space: normal; /* Don't preserve newlines - let text flow normally */
     direction: rtl; /* RTL for Hebrew text */
     text-align: right; /* Right-align text */
     font-family: 'Inter', 'Poppins', 'Heebo', sans-serif;
@@ -277,13 +277,13 @@ body {
     font-weight: 400;
     resize: none;
     min-height: 40px;
-    max-height: 120px;
-    overflow-y: auto;
+    max-height: 40px;
+    overflow-y: hidden;
     direction: rtl; /* RTL for Hebrew text */
     text-align: right; /* Right-align Hebrew text */
     line-height: 1.4;
-    white-space: pre-wrap; /* Preserve newlines and spaces */
-    word-wrap: break-word;
+    white-space: nowrap; /* Prevent wrapping */
+    word-wrap: normal;
 }
 
 #messageInput::placeholder {
