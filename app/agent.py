@@ -8,8 +8,7 @@ import json
 
 from .settings import settings
 from .vectorstore import vector_store
-from .tools import append_lead, send_lead_email
-from .tools.gmail import create_lead_email_body
+from .tools import append_lead
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +44,9 @@ Core Operating Procedure: Information Retrieval Hierarchy
 
 You must follow this sequence strictly to answer user questions:
 
-1.  Primary Source (Vector Store): Your first and main source of truth is the Pinecone vector store. For ANY question about products, policies, or company information, you MUST start by using the `vector_search` tool.
-2.  Secondary Source (Live Website): If, and only if, the Pinecone vector store does not provide a sufficient answer, use the `firecrawl_scrape` tool.
-3.  Human Handoff (Final Resort): If both tools fail, DO NOT INVENT AN ANSWER. Use the handoff script.
+1. Primary Source (Vector Store): Your first and main source of truth is the Pinecone vector store. For ANY question about products, policies, or company information, you MUST start by using the `vector_search` tool.
+2. Secondary Source (Live Website): If, and only if, the Pinecone vector store does not provide a sufficient answer, use the `website_scrape` tool to get live information from the website.
+3. Human Handoff (Final Resort): If both tools fail, DO NOT INVENT AN ANSWER. Use the handoff script.
 
 ---
 
@@ -58,14 +57,15 @@ Your goal is to be a sales consultant, not a search engine. You must synthesize 
 The Summary-First Answering Method (CRITICAL RULE)
 This is your primary method for answering questions about products:
 
-Step 1: The Initial Summary. Always start with a very brief, one-to-two sentence summary. This summary should directly answer the user's question and highlight the main benefit.
+Step 1: Use Vector Search First. Always start by using the `vector_search` tool for any product questions.
 
-Step 2: Ask to Elaborate. Immediately after the summary, you MUST ask the user if they want more information. Use phrases like:
-- "רוצה שאפרט עוד?"
-- "תרצה לשמוע עוד על זה?"
-- "מעניין אותך לדעת גם על הניחוח והתחושה שהוא מעניק?"
+Step 2: The Initial Summary. Provide a brief, one-to-two sentence summary that directly answers the user's question.
 
-Step 3: The Elaboration. Only if the user confirms they want more details (e.g., says "כן", "ספר לי עוד"), should you provide the longer, more descriptive explanation. This is when you use the human-centric language about benefits and feelings.
+Step 3: Ask to Elaborate. Immediately after the summary, ask if they want more information: "רוצה שאפרט עוד?" or "תרצה לשמוע עוד על זה?"
+
+Step 4: Use Website Scrape if Needed. If vector search doesn't provide complete information, use `website_scrape` tool for live website data.
+
+Step 5: The Elaboration. Only if the user confirms they want more details, provide longer descriptions with human-centric language about benefits and feelings.
 
 - Direct Intent Mapping:
 - If a user asks for "perfume for a woman", your summary should be about "Lust for Her".
@@ -188,7 +188,7 @@ class LustBotTools(Toolkit):
     def __init__(self, **kwargs):
         tools = [
             self.vector_search,
-            self.website_scrape, 
+            self.website_scrape,
             self.capture_lead,
             self.save_callback_request
         ]
@@ -231,8 +231,9 @@ class LustBotTools(Toolkit):
 
     def website_scrape(self, url: str) -> str:
         """
-        If, and only if, the Pinecone vector store does not provide a sufficient answer, 
-        use this tool to scrape the live website.
+        Scrape website content when vector store doesn't have sufficient information.
+        Use this tool ONLY if vector_search doesn't provide adequate answers.
+        Input should be a valid website URL.
         """
         try:
             website_tools = WebsiteTools()
@@ -288,16 +289,6 @@ class LustBotTools(Toolkit):
             except Exception as e:
                 logger.warning(f"Failed to save to sheets (will continue without): {e}")
                 # Don't fail the whole process if sheets fails
-            
-            # Send email notification
-            try:
-                email_subject = f"הזמנה חדשה מ-LustBot: {name} - {product}"
-                email_body = create_lead_email_body(name, email, phone, product, address, payment_method, shipping_type)
-                email_result = send_lead_email(email_subject, email_body)
-                logger.info(f"Email notification logged for lead: {name}")
-            except Exception as e:
-                logger.warning(f"Failed to send email (will continue without): {e}")
-                # Don't fail the whole process if email fails
             
             logger.info(f"Lead captured successfully: {name} - {email} - {product}")
             

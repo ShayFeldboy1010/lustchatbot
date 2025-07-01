@@ -33,8 +33,6 @@ class Settings(BaseSettings):
     # Server Settings (for Render deployment)
     host: str = Field("0.0.0.0", env="HOST")
     port: int = Field(8000, env="PORT")
-    host: str = "0.0.0.0"
-    port: int = 8001
     
     # CORS
     cors_origins: list = ["*"]  # In production: ["https://mylustshop.com"]
