@@ -8,16 +8,20 @@ from dataclasses import dataclass
 from typing import Optional, List
 import os
 import re
-import logfire
 
 from .prompts import SALES_AGENT_SYSTEM_PROMPT, ESCALATION_KEYWORDS, ESCALATION_RESPONSE
 from ..config import get_settings
 
 settings = get_settings()
 
-# Configure Logfire for observability
-logfire.configure()
-logfire.instrument_pydantic_ai()
+# Configure Logfire for observability (optional - only if configured)
+try:
+    import logfire
+    logfire.configure()
+    logfire.instrument_pydantic_ai()
+    print("Logfire configured successfully")
+except Exception as e:
+    print(f"Logfire not configured (optional): {e}")
 
 # Set API keys for pydantic-ai
 os.environ['GOOGLE_API_KEY'] = settings.google_api_key
