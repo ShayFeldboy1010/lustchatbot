@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyLastShop - צ'אט תמיכה</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="header-info">
+                <div class="avatar">
+                    <span>🛒</span>
+                </div>
+                <div class="header-text">
+                    <h1>לסטי 😊</h1>
+                    <span class="status online">מחובר</span>
+                </div>
+            </div>
+            <button class="clear-btn" id="clearBtn" title="נקה שיחה">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    היי! אני לסטי 😊 איך אפשר לעזור לך היום?
+                </div>
+            </div>
+        </div>
+
+        <!-- Escalation Banner (hidden by default) -->
+        <div class="escalation-banner" id="escalationBanner" style="display: none;">
+            <span>🙌</span> הבקשה שלך הועברה לנציג אנושי
+        </div>
+
+        <!-- Input -->
+        <div class="chat-input-container">
+            <form id="chatForm">
+                <textarea
+                    id="messageInput"
+                    placeholder="כתוב הודעה... (Shift+Enter לשורה חדשה)"
+                    autocomplete="off"
+                    rows="1"
+                ></textarea>
+                <button type="submit" id="sendButton">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/chat.js"></script>
+</body>
+</html>
