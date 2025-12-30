@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 from typing import Optional
 import asyncio
 import os
+import json
 
 from ..config import get_settings
 from ..models.order import OrderData
@@ -26,21 +27,30 @@ def get_sheets_client() -> gspread.Client:
     global _sheets_client
 
     if _sheets_client is None:
-        # Get credentials path - handle relative and absolute paths
-        creds_path = settings.google_sheets_credentials_path
-        if not os.path.isabs(creds_path):
-            # Make path relative to the project root (parent of backend)
-            # __file__ is in backend/app/tools/google_sheets.py
-            # Go up 4 levels: tools -> app -> backend -> project_root
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            creds_path = os.path.join(project_root, creds_path.lstrip('./'))
+        # Try to get credentials from JSON environment variable first (for cloud deployment)
+        if settings.google_sheets_credentials_json:
+            print("Loading Google Sheets credentials from environment variable")
+            creds_info = json.loads(settings.google_sheets_credentials_json)
+            creds = Credentials.from_service_account_info(
+                creds_info,
+                scopes=SCOPES
+            )
+        else:
+            # Fall back to file path (for local development)
+            creds_path = settings.google_sheets_credentials_path
+            if not os.path.isabs(creds_path):
+                # Make path relative to the project root (parent of backend)
+                # __file__ is in backend/app/tools/google_sheets.py
+                # Go up 4 levels: tools -> app -> backend -> project_root
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                creds_path = os.path.join(project_root, creds_path.lstrip('./'))
 
-        print(f"Loading Google Sheets credentials from: {creds_path}")
+            print(f"Loading Google Sheets credentials from: {creds_path}")
 
-        creds = Credentials.from_service_account_file(
-            creds_path,
-            scopes=SCOPES
-        )
+            creds = Credentials.from_service_account_file(
+                creds_path,
+                scopes=SCOPES
+            )
         _sheets_client = gspread.authorize(creds)
 
     return _sheets_client

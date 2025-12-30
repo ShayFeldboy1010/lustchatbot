@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: lustbot-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: Knowledge-base
+      - key: MONGODB_COLLECTION
+        value: data-for-ai
+      - key: MONGODB_VECTOR_INDEX
+        value: rag_vector_index
+      - key: GOOGLE_SHEETS_CREDENTIALS_JSON
+        sync: false
+      - key: GOOGLE_SHEETS_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_SHEETS_SHEET_NAME
+        value: Lust leads
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_HUMAN_SUPPORT_NUMBER
+        value: "972508661290"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+    healthCheckPath: /health

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # Google Sheets
     google_sheets_credentials_path: str = "./credentials.json"
+    google_sheets_credentials_json: str = ""  # JSON string for cloud deployment
     google_sheets_spreadsheet_id: str
     google_sheets_sheet_name: str = "Lust leads"
 
