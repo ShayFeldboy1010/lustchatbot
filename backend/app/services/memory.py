@@ -140,8 +140,16 @@ class ConversationMemory:
     def set_pending_escalation(self, session_id: str, pending: bool = True) -> None:
         """Mark session as waiting for escalation problem description"""
         with self._lock:
-            if session_id in self._sessions:
-                self._sessions[session_id]['pending_escalation'] = pending
+            # Create session if doesn't exist
+            if session_id not in self._sessions:
+                self._sessions[session_id] = {
+                    'messages': [],
+                    'created_at': datetime.now(),
+                    'last_access': datetime.now(),
+                    'order_completed': False
+                }
+            self._sessions[session_id]['pending_escalation'] = pending
+            print(f"DEBUG: Set pending_escalation={pending} for {session_id}")
 
     def is_pending_escalation(self, session_id: str) -> bool:
         """Check if session is waiting for escalation problem description"""

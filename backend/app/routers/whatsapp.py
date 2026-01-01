@@ -105,7 +105,10 @@ async def receive_message(request: Request):
             return {"status": "ok"}
 
         # Check if waiting for escalation problem description
-        if conversation_memory.is_pending_escalation(session_id):
+        is_pending = conversation_memory.is_pending_escalation(session_id)
+        print(f"DEBUG: Session {session_id} - is_pending_escalation: {is_pending}")
+
+        if is_pending:
             # This message is the problem description - send to human support
             conversation_memory.set_pending_escalation(session_id, False)
             escalated_sessions.add(session_id)
