@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
@@ -6,7 +6,7 @@ from datetime import datetime
 class OrderData(BaseModel):
     """Order data model for Google Sheets"""
     customer_name: str
-    customer_email: str
+    customer_email: Optional[str] = ""  # אופציונאלי
     customer_phone: str
     product_name: str
     quantity: int = 1

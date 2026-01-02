@@ -151,12 +151,12 @@ async def search_products_info_fallback(
 async def _save_order_internal(
     session_id: str,
     customer_name: str,
-    customer_email: str,
     customer_phone: str,
     product_name: str,
     quantity: int,
     full_address: str,
     payment_method: str,
+    customer_email: str = "",
     delivery_notes: str = ""
 ) -> str:
     """Internal function for saving orders"""
@@ -196,11 +196,11 @@ async def _save_order_internal(
 
             if is_cash_or_bit and settings.whatsapp_human_support_number:
                 try:
+                    email_line = f"\n📧 מייל: {customer_email}" if customer_email else ""
                     notification_message = f"""🛒 הזמנה חדשה - תשלום לשליח!
 
 👤 שם: {customer_name}
-📱 טלפון: {customer_phone}
-📧 מייל: {customer_email}
+📱 טלפון: {customer_phone}{email_line}
 📦 מוצר: {product_name}
 🔢 כמות: {quantity}
 📍 כתובת: {full_address}
@@ -236,12 +236,12 @@ SAVE_ORDER_DOCSTRING = """
 
     Args:
         customer_name: Full name of the customer
-        customer_email: Customer's email address
         customer_phone: Customer's phone number
         product_name: Name of the product being ordered
         quantity: Number of items
         full_address: Complete delivery address
         payment_method: Payment method (bit/מזומן/cash)
+        customer_email: Customer's email address (OPTIONAL - only if provided by customer)
         delivery_notes: Any notes for the delivery person
 
     Returns:
@@ -253,18 +253,18 @@ SAVE_ORDER_DOCSTRING = """
 async def save_order(
     ctx: RunContext[ChatDependencies],
     customer_name: str,
-    customer_email: str,
     customer_phone: str,
     product_name: str,
     quantity: int,
     full_address: str,
     payment_method: str,
+    customer_email: str = "",
     delivery_notes: str = ""
 ) -> str:
     """⛔ CRITICAL: Only call this AFTER showing summary AND receiving explicit confirmation!"""
     return await _save_order_internal(
-        ctx.deps.session_id, customer_name, customer_email, customer_phone,
-        product_name, quantity, full_address, payment_method, delivery_notes
+        ctx.deps.session_id, customer_name, customer_phone,
+        product_name, quantity, full_address, payment_method, customer_email, delivery_notes
     )
 
 save_order.__doc__ = SAVE_ORDER_DOCSTRING
@@ -274,18 +274,18 @@ save_order.__doc__ = SAVE_ORDER_DOCSTRING
 async def save_order_fallback(
     ctx: RunContext[ChatDependencies],
     customer_name: str,
-    customer_email: str,
     customer_phone: str,
     product_name: str,
     quantity: int,
     full_address: str,
     payment_method: str,
+    customer_email: str = "",
     delivery_notes: str = ""
 ) -> str:
     """⛔ CRITICAL: Only call this AFTER showing summary AND receiving explicit confirmation!"""
     return await _save_order_internal(
-        ctx.deps.session_id, customer_name, customer_email, customer_phone,
-        product_name, quantity, full_address, payment_method, delivery_notes
+        ctx.deps.session_id, customer_name, customer_phone,
+        product_name, quantity, full_address, payment_method, customer_email, delivery_notes
     )
 
 save_order_fallback.__doc__ = SAVE_ORDER_DOCSTRING
