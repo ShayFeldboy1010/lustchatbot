@@ -70,9 +70,9 @@ sales_agent = Agent(
     model_settings=ModelSettings(temperature=0.1)
 )
 
-# Fallback agent using Gemini 2.5 Flash Preview (for when primary model fails)
+# Fallback agent using Gemini 2.0 Flash (for when primary model fails)
 fallback_agent = Agent(
-    'google-gla:gemini-2.5-flash-preview',
+    'google-gla:gemini-2.0-flash',
     system_prompt=SALES_AGENT_SYSTEM_PROMPT,
     retries=2,
     deps_type=ChatDependencies,
@@ -363,9 +363,9 @@ async def process_message(
         error_str = str(e)
         print(f"Primary agent (gemini-3-flash-preview) error: {error_str}")
 
-        # Try fallback agent (Gemini 2.5 Flash Preview)
+        # Try fallback agent (Gemini 2.0 Flash)
         try:
-            print("🔄 Trying fallback agent (gemini-2.5-flash-preview)...")
+            print("🔄 Trying fallback agent (gemini-2.0-flash)...")
             result = await fallback_agent.run(
                 message,
                 deps=deps,
