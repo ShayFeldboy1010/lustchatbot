@@ -17,11 +17,15 @@ settings = get_settings()
 # Configure Logfire for observability (optional - only if configured)
 try:
     import logfire
-    logfire.configure()
-    logfire.instrument_pydantic_ai()
-    print("Logfire configured successfully")
+    logfire_token = os.environ.get('LOGFIRE_TOKEN')
+    if logfire_token:
+        logfire.configure(token=logfire_token)
+        logfire.instrument_pydantic_ai()
+        print("Logfire configured successfully with token")
+    else:
+        print("LOGFIRE_TOKEN not set - skipping Logfire configuration")
 except Exception as e:
-    print(f"Logfire not configured (optional): {e}")
+    print(f"Logfire configuration error: {e}")
 
 # Set API keys for pydantic-ai
 os.environ['GOOGLE_API_KEY'] = settings.google_api_key
