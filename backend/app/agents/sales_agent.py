@@ -19,13 +19,16 @@ try:
     import logfire
     logfire_token = os.environ.get('LOGFIRE_TOKEN')
     if logfire_token:
-        logfire.configure(token=logfire_token)
+        print(f"LOGFIRE_TOKEN found (length: {len(logfire_token)}, starts with: {logfire_token[:20]}...)")
+        logfire.configure(token=logfire_token, send_to_logfire='if-token-present')
         logfire.instrument_pydantic_ai()
         print("Logfire configured successfully with token")
     else:
         print("LOGFIRE_TOKEN not set - skipping Logfire configuration")
 except Exception as e:
+    import traceback
     print(f"Logfire configuration error: {e}")
+    traceback.print_exc()
 
 # Set API keys for pydantic-ai
 os.environ['GOOGLE_API_KEY'] = settings.google_api_key
