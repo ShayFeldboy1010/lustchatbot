@@ -8,7 +8,7 @@ from ..services.whatsapp import whatsapp_service
 from ..agents.sales_agent import process_message
 from ..services.memory import conversation_memory
 from ..tools.escalation import send_whatsapp_escalation
-from ..agents.prompts import ESCALATION_CONFIRMED
+from ..agents.prompts import ESCALATION_CONFIRMED, ESCALATION_ASK_PHONE, ESCALATION_ASK_PROBLEM
 
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
 
@@ -104,31 +104,54 @@ async def receive_message(request: Request):
             print(f"Session {session_id} already escalated, ignoring message")
             return {"status": "ok"}
 
-        # Check if waiting for escalation problem description
-        is_pending = conversation_memory.is_pending_escalation(session_id)
-        print(f"DEBUG: Session {session_id} - is_pending_escalation: {is_pending}")
+        # Check if in escalation collection flow
+        escalation_state = conversation_memory.get_escalation_state(session_id)
+        print(f"DEBUG: Session {session_id} - escalation_state: {escalation_state}")
 
-        if is_pending:
-            # This message is the problem description - send to human support
-            conversation_memory.set_pending_escalation(session_id, False)
+        if escalation_state == 'waiting_name':
+            # Got the name, now ask for phone
+            conversation_memory.set_escalation_state(session_id, 'waiting_phone', {'name': message_text})
+            await whatsapp_service.send_text_message(sender, ESCALATION_ASK_PHONE)
+            print(f"Escalation: Got name '{message_text}' for {sender}, asking for phone")
+            return {"status": "ok"}
+
+        if escalation_state == 'waiting_phone':
+            # Got the phone, now ask for problem
+            conversation_memory.set_escalation_state(session_id, 'waiting_problem', {'phone': message_text})
+            await whatsapp_service.send_text_message(sender, ESCALATION_ASK_PROBLEM)
+            print(f"Escalation: Got phone '{message_text}' for {sender}, asking for problem")
+            return {"status": "ok"}
+
+        if escalation_state == 'waiting_problem':
+            # Got the problem - now send to human support
+            escalation_data = conversation_memory.get_escalation_data(session_id)
+            customer_name = escalation_data.get('name', sender_name or 'לא ידוע')
+            customer_phone = escalation_data.get('phone', sender)
+
+            # Clear escalation state and mark as escalated
+            conversation_memory.clear_escalation_state(session_id)
             escalated_sessions.add(session_id)
 
-            # Send formatted message to human support
-            escalation_message = f"""📞 פנייה לנציג
-
-👤 שם: {sender_name or 'לא ידוע'}
-📱 טלפון: {sender}
-❗ בעיה: {message_text}"""
-
+            # Send to human support
             await send_whatsapp_escalation(
-                customer_name=sender_name or "לא ידוע",
-                customer_phone=sender,
+                customer_name=customer_name,
+                customer_phone=customer_phone,
                 problem_description=message_text
             )
 
             # Send confirmation to customer
             await whatsapp_service.send_text_message(sender, ESCALATION_CONFIRMED)
-            print(f"Escalation completed for {sender} with problem: {message_text}")
+            print(f"Escalation completed for {sender}: name={customer_name}, phone={customer_phone}, problem={message_text}")
+            return {"status": "ok"}
+
+        # Legacy check for old pending_escalation (backwards compatibility)
+        is_pending = conversation_memory.is_pending_escalation(session_id)
+        if is_pending:
+            # Convert to new flow - start asking for name
+            conversation_memory.set_pending_escalation(session_id, False)
+            conversation_memory.set_escalation_state(session_id, 'waiting_phone', {'name': message_text})
+            await whatsapp_service.send_text_message(sender, ESCALATION_ASK_PHONE)
+            print(f"Escalation (legacy): Got name '{message_text}' for {sender}, asking for phone")
             return {"status": "ok"}
 
         # Get conversation history
@@ -186,10 +209,10 @@ async def receive_message(request: Request):
         conversation_memory.add_message(session_id, "user", message_text)
         conversation_memory.add_message(session_id, "assistant", result.response)
 
-        # Handle escalation - set pending and wait for problem description
+        # Handle escalation - start multi-step collection (name → phone → problem)
         if result.needs_escalation:
-            conversation_memory.set_pending_escalation(session_id, True)
-            print(f"Escalation pending for {sender} - waiting for problem description")
+            conversation_memory.set_escalation_state(session_id, 'waiting_name')
+            print(f"Escalation started for {sender} - waiting for name")
 
         # Send response via WhatsApp
         await whatsapp_service.send_text_message(sender, result.response)

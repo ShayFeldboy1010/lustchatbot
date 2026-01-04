@@ -158,6 +158,48 @@ class ConversationMemory:
                 return self._sessions[session_id].get('pending_escalation', False)
             return False
 
+    def set_escalation_state(self, session_id: str, state: str, data: dict = None) -> None:
+        """
+        Set escalation collection state.
+        States: None, 'waiting_name', 'waiting_phone', 'waiting_problem'
+        """
+        with self._lock:
+            if session_id not in self._sessions:
+                self._sessions[session_id] = {
+                    'messages': [],
+                    'created_at': datetime.now(),
+                    'last_access': datetime.now(),
+                    'order_completed': False
+                }
+            self._sessions[session_id]['escalation_state'] = state
+            if data:
+                existing_data = self._sessions[session_id].get('escalation_data', {})
+                existing_data.update(data)
+                self._sessions[session_id]['escalation_data'] = existing_data
+            print(f"DEBUG: Set escalation_state={state} for {session_id}, data={data}")
+
+    def get_escalation_state(self, session_id: str) -> str:
+        """Get current escalation collection state"""
+        with self._lock:
+            if session_id in self._sessions:
+                return self._sessions[session_id].get('escalation_state')
+            return None
+
+    def get_escalation_data(self, session_id: str) -> dict:
+        """Get collected escalation data"""
+        with self._lock:
+            if session_id in self._sessions:
+                return self._sessions[session_id].get('escalation_data', {})
+            return {}
+
+    def clear_escalation_state(self, session_id: str) -> None:
+        """Clear escalation state after completion"""
+        with self._lock:
+            if session_id in self._sessions:
+                self._sessions[session_id]['escalation_state'] = None
+                self._sessions[session_id]['escalation_data'] = {}
+                self._sessions[session_id]['pending_escalation'] = False
+
     def get_session_info(self, session_id: str) -> Optional[dict]:
         """Get session metadata"""
         with self._lock:

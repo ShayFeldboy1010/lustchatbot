@@ -244,12 +244,22 @@ ESCALATION_KEYWORDS = [
     "הונאה"
 ]
 
-# Escalation response message - first ask what the problem is
+# Escalation response message - first ask for name
 ESCALATION_RESPONSE = """בטח, אשמח להעביר אותך לנציג 🙏
+
+מה השם המלא שלך?"""
+
+# Message asking for phone number
+ESCALATION_ASK_PHONE = """תודה! 📱
+
+מה מספר הטלפון שלך?"""
+
+# Message asking for problem description
+ESCALATION_ASK_PROBLEM = """מעולה! ✍️
 
 ספר/י לי בקצרה מה הבעיה כדי שאוכל להעביר לנציג?"""
 
-# Message sent after collecting the problem
+# Message sent after collecting all details
 ESCALATION_CONFIRMED = """תודה! העברתי את הפנייה לנציג 📞
 
 נציג יחזור אליך בהקדם האפשרי!
