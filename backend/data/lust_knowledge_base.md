@@ -102,10 +102,10 @@
 
 | מוצר | קישור |
 |------|-------|
-| LUST FOR HIM | https://mylustshop.com/products/%D7%91%D7%95%D7%A9%D7%9D-%D7%A4%D7%A8%D7%95%D7%9E%D7%95%D7%A0%D7%99%D7%9D-%D7%9C%D7%92%D7%91%D7%A8%D7%99%D7%9D |
-| LUST FOR HER | https://mylustshop.com/products/%D7%91%D7%95%D7%A9%D7%9D-%D7%A4%D7%A8%D7%95%D7%9E%D7%95%D7%A0%D7%99%D7%9D-%D7%9C%D7%A0%D7%A9%D7%99%D7%9D |
-| מארז זוגי (Couple) | https://mylustshop.com/products/%D7%9E%D7%90%D7%A8%D7%96-%D7%9B%D7%A4%D7%95%D7%9C |
-| מארז זוגי + AskQ | https://mylustshop.com/products/%D7%9C%D7%A9%D7%95%D7%91%D7%91%D7%99%D7%9D-%D7%91%D7%9C%D7%91%D7%93 |
+| LUST FOR HIM | https://mylustshop.com/products/בושם-פרומונים-לגברים |
+| LUST FOR HER | https://mylustshop.com/products/בושם-פרומונים-לנשים |
+| מארז זוגי (Couple) | https://mylustshop.com/products/מארז-כפול |
+| מארז זוגי + AskQ | https://mylustshop.com/products/לשובבים-בלבד |
 
 **חשוב:** להשתמש רק בקישורים אלו! לא להמציא קישורים אחרים!
 
