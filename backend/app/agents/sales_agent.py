@@ -11,6 +11,7 @@ import re
 
 from .prompts import SALES_AGENT_SYSTEM_PROMPT, ESCALATION_KEYWORDS, ESCALATION_RESPONSE
 from ..config import get_settings
+from ..services.message_formatter import format_for_whatsapp
 
 settings = get_settings()
 
@@ -52,19 +53,6 @@ def check_escalation(message: str) -> bool:
     """Check if message contains escalation keywords"""
     message_lower = message.lower()
     return any(keyword in message_lower for keyword in ESCALATION_KEYWORDS)
-
-
-def clean_markdown_formatting(text: str) -> str:
-    """Remove markdown formatting like ** and ### from text"""
-    # Remove bold formatting **text** -> text
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-    # Remove italic formatting *text* -> text
-    text = re.sub(r'\*([^*]+)\*', r'\1', text)
-    # Remove headers ### text -> text
-    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
-    # Remove remaining stray asterisks
-    text = text.replace('**', '').replace('*', '')
-    return text
 
 
 # Initialize the Pydantic AI Agent with Google Gemini 3 Flash Preview
@@ -359,7 +347,7 @@ async def process_message(
         response_text = getattr(result, 'data', None) or getattr(result, 'output', None) or str(result)
 
         # Clean markdown formatting (remove ** and ### etc.)
-        response_text = clean_markdown_formatting(response_text)
+        response_text = format_for_whatsapp(response_text)
 
         return ChatResponse(
             response=response_text,
@@ -380,7 +368,7 @@ async def process_message(
             )
 
             response_text = getattr(result, 'data', None) or getattr(result, 'output', None) or str(result)
-            response_text = clean_markdown_formatting(response_text)
+            response_text = format_for_whatsapp(response_text)
 
             print("✅ Fallback agent succeeded")
             return ChatResponse(
