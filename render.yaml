@@ -32,7 +32,7 @@ services:
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
       - key: WHATSAPP_HUMAN_SUPPORT_NUMBER
-        value: "972508661290"
+        value: "972543970106"
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
