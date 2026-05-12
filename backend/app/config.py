@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str
     whatsapp_business_account_id: str
     whatsapp_verify_token: str = "lustbot_whatsapp_verify_2024"
-    whatsapp_human_support_number: str = "972543970106"
+    whatsapp_human_support_number: str = "972555193010"
 
     # Application
     secret_key: str
