@@ -60,8 +60,7 @@ class WhatsAppService:
                 timeout=30.0
             )
 
-            if response.status_code != 200:
-                print(f"WhatsApp API error: {response.status_code} - {response.text}")
+            print(f"WhatsApp send → to={to} status={response.status_code} body={response.text}")
 
             return response.json()
 
