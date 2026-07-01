@@ -76,6 +76,12 @@ def main() -> int:
         "last_message": "<script>alert(1)</script>",
         "last_timestamp": datetime.now(timezone.utc),
         "escalated": True,
+    }, {
+        "phone": "972500000001",
+        "role": "customer",
+        "content": "<script>alert(2)</script>",
+        "timestamp": datetime.now(timezone.utc),
+        "escalated": False,
     }]
 
     with patch("app.routers.admin_ui.get_collection", return_value=FakeCollection(fake_docs)):
@@ -92,6 +98,8 @@ def main() -> int:
 
         response = client.get("/admin/chat/972500000001", auth=("admin", "test-secret-123"))
         passed &= assert_equal(response.status_code, 200, "thread view accepts correct password")
+        passed &= assert_equal("&lt;script&gt;alert(2)&lt;/script&gt;" in response.text, True, "chat thread content HTML-escaped")
+        passed &= assert_equal("<script>alert(2)</script>" in response.text, False, "raw script tag not present in chat thread")
 
     return 0 if passed else 1
 

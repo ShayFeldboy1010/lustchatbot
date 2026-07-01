@@ -221,8 +221,6 @@ async def receive_message(request: Request):
         # Update conversation history
         conversation_memory.add_message(session_id, "user", message_text)
         conversation_memory.add_message(session_id, "assistant", result.response)
-        await conversation_store.save_message(sender, sender_name, "customer", message_text, escalated=result.needs_escalation)
-        await conversation_store.save_message(sender, sender_name, "bot", result.response)
 
         # Handle escalation - start multi-step collection (name → phone → problem)
         if result.needs_escalation:
@@ -233,6 +231,10 @@ async def receive_message(request: Request):
         await whatsapp_service.send_text_message(sender, result.response)
 
         print(f"Sent response to {sender}: {result.response[:100]}...")
+
+        # Persist conversation (best-effort, after the reply has already been sent)
+        await conversation_store.save_message(sender, sender_name, "customer", message_text, escalated=result.needs_escalation)
+        await conversation_store.save_message(sender, sender_name, "bot", result.response)
 
         return {"status": "ok"}
 
