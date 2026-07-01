@@ -3,7 +3,10 @@ fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 pydantic>=2.5.3
 pydantic-settings>=2.1.0
-pydantic-ai>=0.0.14
+# Pinned: newer pydantic-ai removed the `google-gla` provider prefix the agent
+# uses (google-gla:gemini-3-flash-preview), causing "Unknown provider: google-gla"
+# at runtime. 1.39.0 is verified working end-to-end with the primary model.
+pydantic-ai==1.39.0
 python-dotenv>=1.0.0
 jinja2>=3.1.0
 
