@@ -48,9 +48,20 @@
             justify-content: space-between;
         }
         .sidebar-head h1 { font-size: 18px; margin: 0; font-weight: 600; }
+        .sidebar-head .head-right { display: flex; align-items: center; gap: 10px; }
         .sidebar-head .count {
             background: rgba(255,255,255,.22);
             font-size: 12px; padding: 3px 10px; border-radius: 20px;
+        }
+        .live { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: .92; }
+        .live-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #eaffea;
+            box-shadow: 0 0 0 0 rgba(255,255,255,.7); animation: livepulse 1.8s infinite;
+        }
+        @keyframes livepulse {
+            0% { box-shadow: 0 0 0 0 rgba(255,255,255,.6); }
+            70% { box-shadow: 0 0 0 7px rgba(255,255,255,0); }
+            100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
         }
         .search-wrap { padding: 8px 12px; background: var(--wa-list-bg); border-bottom: 1px solid var(--wa-border); }
         .search-wrap input {
@@ -150,13 +161,15 @@
     </style>
 </head>
 <body {% if selected_phone %}data-view="chat"{% endif %}>
-    {% set colors = ["#e17076","#7bc862","#65aadd","#a695e7","#ee7aae","#6ec9cb","#f6b445","#faa774","#b05a9f","#5eb069"] %}
     <div class="app">
         <!-- Sidebar / conversation list -->
         <aside class="sidebar">
             <div class="sidebar-head">
                 <h1>שיחות לקוחות</h1>
-                <span class="count">{{ customers|length }}</span>
+                <span class="head-right">
+                    <span class="live"><span class="live-dot"></span>עדכון חי</span>
+                    <span class="count" id="convCount">{{ customers|length }}</span>
+                </span>
             </div>
             <div class="search-wrap">
                 <input id="search" type="text" placeholder="חיפוש לפי שם או מספר…" autocomplete="off">
@@ -167,7 +180,7 @@
                 <a class="conv-row {% if c._id == selected_phone %}active{% endif %}"
                    href="/admin/chat/{{ c._id }}"
                    data-search="{{ (c.name or '')|lower }} {{ c._id|lower }}">
-                    <div class="avatar" style="background: {{ colors[loop.index0 % colors|length] }}">
+                    <div class="avatar" style="background: {{ c._id|avatar_color }}">
                         {{ (c.name or c._id)[:1]|upper }}
                     </div>
                     <div class="conv-body">
@@ -195,7 +208,7 @@
             {% if selected_phone %}
             <div class="chat-head">
                 <a class="back-btn" href="/admin" aria-label="חזרה">&rarr;</a>
-                <div class="avatar" style="background: {{ colors[0] }}">{{ (selected_name or selected_phone)[:1]|upper }}</div>
+                <div class="avatar" style="background: {{ selected_phone|avatar_color }}">{{ (selected_name or selected_phone)[:1]|upper }}</div>
                 <div class="chat-head-info">
                     <span class="chat-head-name">{{ selected_name or selected_phone }}</span>
                     <span class="chat-head-phone">{{ selected_phone }}</span>
@@ -224,21 +237,127 @@
     </div>
 
     <script>
-        // Client-side filter of the conversation list.
+        var SELECTED = {{ selected_phone|tojson }};
+        var AVATAR_COLORS = ["#e17076","#7bc862","#65aadd","#a695e7","#ee7aae","#6ec9cb","#f6b445","#faa774","#b05a9f","#5eb069"];
+        function avatarColor(phone) {
+            phone = String(phone || "");
+            var total = 0;
+            for (var i = 0; i < phone.length; i++) { total += phone.charCodeAt(i); }
+            return AVATAR_COLORS[total % AVATAR_COLORS.length];
+        }
+        function initialOf(s) { s = String(s || ""); return s ? s.charAt(0).toUpperCase() : ""; }
+
+        // --- Client-side search filter (re-applied after every live refresh) ---
         var search = document.getElementById("search");
-        if (search) {
-            search.addEventListener("input", function () {
-                var q = this.value.trim().toLowerCase();
-                document.querySelectorAll("#convList .conv-row").forEach(function (row) {
-                    var hay = (row.getAttribute("data-search") || "") + " " +
-                              (row.querySelector(".conv-preview")?.textContent || "").toLowerCase();
-                    row.style.display = hay.indexOf(q) === -1 ? "none" : "";
-                });
+        function applyFilter() {
+            var q = (search ? search.value : "").trim().toLowerCase();
+            document.querySelectorAll("#convList .conv-row").forEach(function (row) {
+                var hay = (row.getAttribute("data-search") || "") + " " +
+                          (row.querySelector(".conv-preview")?.textContent || "").toLowerCase();
+                row.style.display = hay.indexOf(q) === -1 ? "none" : "";
             });
         }
-        // Jump to the latest message, like WhatsApp.
-        var msgs = document.getElementById("messages");
-        if (msgs) { msgs.scrollTop = msgs.scrollHeight; }
+        if (search) { search.addEventListener("input", applyFilter); }
+
+        // --- Build one sidebar row (textContent everywhere = XSS-safe) ---
+        function buildRow(c) {
+            var a = document.createElement("a");
+            a.className = "conv-row" + (c.phone === SELECTED ? " active" : "");
+            a.href = "/admin/chat/" + encodeURIComponent(c.phone);
+            a.setAttribute("data-search", ((c.name || "") + " " + c.phone).toLowerCase());
+
+            var av = document.createElement("div");
+            av.className = "avatar";
+            av.style.background = avatarColor(c.phone);
+            av.textContent = initialOf(c.name || c.phone);
+
+            var body = document.createElement("div"); body.className = "conv-body";
+            var top = document.createElement("div"); top.className = "conv-top";
+            var name = document.createElement("span"); name.className = "conv-name";
+            name.textContent = c.name || c.phone;
+            var time = document.createElement("span");
+            time.className = "conv-time" + (c.escalated ? " alert" : "");
+            time.textContent = c.time_label || "";
+            top.appendChild(name); top.appendChild(time);
+
+            var bottom = document.createElement("div"); bottom.className = "conv-bottom";
+            var prev = document.createElement("span"); prev.className = "conv-preview";
+            prev.textContent = c.last_message || "";
+            bottom.appendChild(prev);
+            if (c.escalated) {
+                var b = document.createElement("span"); b.className = "badge";
+                b.textContent = "דורש תשומת לב"; bottom.appendChild(b);
+            }
+            body.appendChild(top); body.appendChild(bottom);
+            a.appendChild(av); a.appendChild(body);
+            return a;
+        }
+
+        function renderSidebar(customers) {
+            var list = document.getElementById("convList");
+            if (!list) return;
+            list.textContent = "";
+            if (!customers.length) {
+                var empty = document.createElement("div");
+                empty.className = "empty-list"; empty.textContent = "אין עדיין שיחות";
+                list.appendChild(empty);
+            } else {
+                customers.forEach(function (c) { list.appendChild(buildRow(c)); });
+            }
+            var count = document.getElementById("convCount");
+            if (count) { count.textContent = customers.length; }
+            applyFilter();
+        }
+
+        // --- Chat message rendering ---
+        function buildBubble(m) {
+            var d = document.createElement("div");
+            d.className = "bubble " + (m.role || "customer") + (m.escalated ? " escalated" : "");
+            var t = document.createElement("span"); t.className = "text"; t.textContent = m.content || "";
+            var meta = document.createElement("span"); meta.className = "meta"; meta.textContent = m.time_label || "";
+            d.appendChild(t); d.appendChild(meta);
+            return d;
+        }
+        var lastMsgCount = document.querySelectorAll("#messages .bubble").length;
+        function renderMessages(messages) {
+            var box = document.getElementById("messages");
+            if (!box || messages.length === lastMsgCount) return;
+            var nearBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) < 90;
+            box.textContent = "";
+            messages.forEach(function (m) { box.appendChild(buildBubble(m)); });
+            lastMsgCount = messages.length;
+            if (nearBottom) { box.scrollTop = box.scrollHeight; }
+        }
+
+        // Jump to the latest message on first load, like WhatsApp.
+        var initMsgs = document.getElementById("messages");
+        if (initMsgs) { initMsgs.scrollTop = initMsgs.scrollHeight; }
+
+        // --- Live polling loop ---
+        var lastConvJSON = null;
+        async function poll() {
+            try {
+                var r = await fetch("/admin/api/conversations", { credentials: "same-origin" });
+                if (r.ok) {
+                    var data = await r.json();
+                    if (data.customers) {
+                        var sig = JSON.stringify(data.customers);
+                        if (sig !== lastConvJSON) { lastConvJSON = sig; renderSidebar(data.customers); }
+                    }
+                }
+            } catch (e) { /* transient network error — try again next tick */ }
+
+            if (SELECTED) {
+                try {
+                    var r2 = await fetch("/admin/api/messages/" + encodeURIComponent(SELECTED), { credentials: "same-origin" });
+                    if (r2.ok) {
+                        var d2 = await r2.json();
+                        if (d2.messages) { renderMessages(d2.messages); }
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        }
+        setInterval(poll, 4000);
     </script>
 </body>
 </html>

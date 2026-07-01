@@ -21,6 +21,26 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 MAX_CUSTOMERS = 50
 MAX_MESSAGES = 200
 
+# Stable per-contact avatar colors. The same palette + hash is reproduced in the
+# dashboard's JS so a contact keeps its color across server render and live polls.
+AVATAR_COLORS = [
+    "#e17076", "#7bc862", "#65aadd", "#a695e7", "#ee7aae",
+    "#6ec9cb", "#f6b445", "#faa774", "#b05a9f", "#5eb069",
+]
+
+
+def avatar_color(phone) -> str:
+    total = sum(ord(ch) for ch in str(phone or ""))
+    return AVATAR_COLORS[total % len(AVATAR_COLORS)]
+
+
+templates.env.filters["avatar_color"] = avatar_color
+
+
+def _time_label(dt) -> str:
+    """Format a timestamp exactly as the template does, for live JSON updates."""
+    return dt.strftime("%d/%m %H:%M") if dt else ""
+
 
 def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
     """Reject the request unless the password matches ADMIN_PASSWORD. Fails closed if unset."""
@@ -108,3 +128,50 @@ async def view_chat(phone: str, request: Request, _: None = Depends(require_admi
             "error": error,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# JSON endpoints polled by the dashboard for live updates (no page refresh).
+# ---------------------------------------------------------------------------
+
+@router.get("/api/conversations")
+async def api_conversations(_: None = Depends(require_admin_auth)):
+    collection = get_collection("conversations")
+    try:
+        customers = await _get_customers(collection)
+    except Exception as e:
+        return {"error": str(e), "customers": []}
+    return {
+        "customers": [
+            {
+                "phone": c["_id"],
+                "name": c.get("name") or "",
+                "last_message": c.get("last_message") or "",
+                "escalated": bool(c.get("escalated")),
+                "time_label": _time_label(c.get("last_timestamp")),
+            }
+            for c in customers
+        ]
+    }
+
+
+@router.get("/api/messages/{phone}")
+async def api_messages(phone: str, _: None = Depends(require_admin_auth)):
+    collection = get_collection("conversations")
+    try:
+        cursor = collection.find({"phone": phone}).sort("timestamp", -1).limit(MAX_MESSAGES)
+        messages = await cursor.to_list(length=MAX_MESSAGES)
+        messages.reverse()
+    except Exception as e:
+        return {"error": str(e), "messages": []}
+    return {
+        "messages": [
+            {
+                "role": m.get("role") or "customer",
+                "content": m.get("content") or "",
+                "escalated": bool(m.get("escalated")),
+                "time_label": _time_label(m.get("timestamp")),
+            }
+            for m in messages
+        ]
+    }
