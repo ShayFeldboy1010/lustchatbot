@@ -57,8 +57,9 @@ async def list_conversations(request: Request, _: None = Depends(require_admin_a
         error = str(e)
 
     return templates.TemplateResponse(
+        request,
         "admin_conversations.html",
-        {"request": request, "customers": customers, "error": error},
+        {"customers": customers, "error": error},
     )
 
 
@@ -75,6 +76,7 @@ async def view_chat(phone: str, request: Request, _: None = Depends(require_admi
         error = str(e)
 
     return templates.TemplateResponse(
+        request,
         "admin_chat.html",
-        {"request": request, "phone": phone, "messages": messages, "error": error},
+        {"phone": phone, "messages": messages, "error": error},
     )
