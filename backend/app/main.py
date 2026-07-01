@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import os
 
 from .config import get_settings
-from .routers import chat, admin, whatsapp
+from .routers import chat, admin, whatsapp, admin_ui
 from .services.mongodb import close_connections
 from .services import conversation_store
 
@@ -50,6 +50,7 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(whatsapp.router)
+app.include_router(admin_ui.router)
 
 
 # Root endpoint
