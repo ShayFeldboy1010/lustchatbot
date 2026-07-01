@@ -74,6 +74,7 @@
             padding: 11px 15px; text-decoration: none; color: inherit;
             border-bottom: 1px solid var(--wa-border); cursor: pointer;
         }
+        .conv-row.ordered { background: #f0fbf5; box-shadow: inset 4px 0 0 var(--wa-green); }
         .conv-row:hover { background: var(--wa-hover); }
         .conv-row.active { background: var(--wa-active); }
         .avatar {
@@ -90,6 +91,10 @@
         .conv-preview { font-size: 14px; color: var(--wa-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .badge {
             background: #d9342b; color: #fff; font-size: 11px; font-weight: 600;
+            padding: 2px 8px; border-radius: 12px; flex-shrink: 0; white-space: nowrap;
+        }
+        .badge-order {
+            background: var(--wa-green); color: #fff; font-size: 11px; font-weight: 600;
             padding: 2px 8px; border-radius: 12px; flex-shrink: 0; white-space: nowrap;
         }
         .empty-list { text-align: center; color: var(--wa-sub); padding: 40px 20px; }
@@ -149,6 +154,56 @@
             font-size: 14px; text-align: center;
         }
 
+        /* ---------- Bot state (human takeover) ---------- */
+        .chat-head-spacer { flex: 1; }
+        .bot-state { display: flex; align-items: center; gap: 8px; }
+        .bot-pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12.5px; font-weight: 600; padding: 5px 12px;
+            border-radius: 20px; white-space: nowrap;
+        }
+        .bot-pill.active { background: #e7f7ee; color: #067a52; }
+        .bot-pill.paused { background: #fff3cd; color: #8a6d00; }
+        .handback-btn {
+            font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+            border: 0; background: var(--wa-green); color: #fff;
+            padding: 6px 12px; border-radius: 20px;
+        }
+        .handback-btn:hover { background: var(--wa-green-dark); }
+        .handback-btn[hidden] { display: none; }
+        .order-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12.5px; font-weight: 600; padding: 5px 12px;
+            border-radius: 20px; background: #e7f7ee; color: #067a52; white-space: nowrap;
+        }
+        .order-chip[hidden] { display: none; }
+
+        /* agent (human-sent) bubble = outgoing, distinct from the bot */
+        .bubble.agent { align-self: flex-end; background: #b8e9c8; border-start-end-radius: 0; }
+        .bubble .sender { display: block; font-size: 11px; font-weight: 700; color: #067a52; margin-bottom: 2px; }
+
+        /* ---------- Composer ---------- */
+        .composer { background: #f0f2f5; padding: 10px 16px; border-top: 1px solid var(--wa-border); }
+        .window-warn {
+            background: #fff3cd; color: #8a6d00; font-size: 12.5px;
+            padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; text-align: center;
+        }
+        .window-warn[hidden] { display: none; }
+        .composer form { display: flex; gap: 8px; align-items: flex-end; }
+        .composer textarea {
+            flex: 1; resize: none; border: 0; border-radius: 20px;
+            padding: 10px 16px; font: inherit; font-size: 14.5px; line-height: 1.35;
+            max-height: 120px; outline: none; background: #fff;
+        }
+        .send-btn {
+            border: 0; background: var(--wa-green); color: #fff;
+            width: 44px; height: 44px; border-radius: 50%; font-size: 18px;
+            cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        }
+        .send-btn:hover { background: var(--wa-green-dark); }
+        .send-btn:disabled { opacity: .5; cursor: default; }
+        .send-status { font-size: 12px; color: #b3261e; margin-top: 6px; text-align: center; min-height: 14px; }
+
         /* ---------- Responsive ---------- */
         @media (max-width: 820px) {
             .sidebar { width: 100%; min-width: 0; max-width: none; }
@@ -177,7 +232,7 @@
             {% if error %}<div class="error">שגיאה בטעינת השיחות: {{ error }}</div>{% endif %}
             <div class="conv-list" id="convList">
                 {% for c in customers %}
-                <a class="conv-row {% if c._id == selected_phone %}active{% endif %}"
+                <a class="conv-row {% if c._id == selected_phone %}active{% endif %}{% if c.ordered %} ordered{% endif %}"
                    href="/admin/chat/{{ c._id }}"
                    data-search="{{ (c.name or '')|lower }} {{ c._id|lower }}">
                     <div class="avatar" style="background: {{ c._id|avatar_color }}">
@@ -192,6 +247,7 @@
                         </div>
                         <div class="conv-bottom">
                             <span class="conv-preview">{{ c.last_message }}</span>
+                            {% if c.ordered %}<span class="badge-order">🛒 הזמנה</span>{% endif %}
                             {% if c.escalated %}<span class="badge">דורש תשומת לב</span>{% endif %}
                         </div>
                     </div>
@@ -213,11 +269,20 @@
                     <span class="chat-head-name">{{ selected_name or selected_phone }}</span>
                     <span class="chat-head-phone">{{ selected_phone }}</span>
                 </div>
+                <div class="chat-head-spacer"></div>
+                <div class="bot-state">
+                    <span class="order-chip" id="orderChip" {% if not ordered %}hidden{% endif %}>🛒 בוצעה הזמנה</span>
+                    <span class="bot-pill {% if bot_paused %}paused{% else %}active{% endif %}" id="botPill">
+                        {% if bot_paused %}🙋 שליטה ידנית{% else %}🤖 הבוט עונה{% endif %}
+                    </span>
+                    <button class="handback-btn" id="handbackBtn" {% if not bot_paused %}hidden{% endif %}>↩︎ החזר לבוט</button>
+                </div>
             </div>
             {% if error %}<div class="error">שגיאה בטעינת השיחה: {{ error }}</div>{% endif %}
             <div class="messages" id="messages">
                 {% for m in messages %}
                 <div class="bubble {{ m.role }}{% if m.escalated %} escalated{% endif %}">
+                    {% if m.role == 'agent' %}<span class="sender">נציג</span>{% endif %}
                     <span class="text">{{ m.content }}</span>
                     <span class="meta">{{ m.timestamp.strftime("%d/%m %H:%M") if m.timestamp else "" }}</span>
                 </div>
@@ -225,6 +290,16 @@
                 {% if not messages and not error %}
                 <div class="placeholder"><div class="icon">💬</div><h2>אין הודעות בשיחה זו</h2></div>
                 {% endif %}
+            </div>
+            <div class="composer">
+                <div class="window-warn" id="windowWarn" {% if window_open %}hidden{% endif %}>
+                    ⏰ חלון 24 השעות סגור — WhatsApp יאפשר לשלוח שוב רק אחרי שהלקוח יכתוב הודעה חדשה.
+                </div>
+                <form id="sendForm" autocomplete="off">
+                    <textarea id="sendInput" rows="1" placeholder="כתוב תשובה ללקוח…"></textarea>
+                    <button type="submit" class="send-btn" id="sendBtn" aria-label="שליחה">&#10148;</button>
+                </form>
+                <div class="send-status" id="sendStatus"></div>
             </div>
             {% else %}
             <div class="placeholder">
@@ -262,7 +337,7 @@
         // --- Build one sidebar row (textContent everywhere = XSS-safe) ---
         function buildRow(c) {
             var a = document.createElement("a");
-            a.className = "conv-row" + (c.phone === SELECTED ? " active" : "");
+            a.className = "conv-row" + (c.phone === SELECTED ? " active" : "") + (c.ordered ? " ordered" : "");
             a.href = "/admin/chat/" + encodeURIComponent(c.phone);
             a.setAttribute("data-search", ((c.name || "") + " " + c.phone).toLowerCase());
 
@@ -284,6 +359,10 @@
             var prev = document.createElement("span"); prev.className = "conv-preview";
             prev.textContent = c.last_message || "";
             bottom.appendChild(prev);
+            if (c.ordered) {
+                var ob = document.createElement("span"); ob.className = "badge-order";
+                ob.textContent = "🛒 הזמנה"; bottom.appendChild(ob);
+            }
             if (c.escalated) {
                 var b = document.createElement("span"); b.className = "badge";
                 b.textContent = "דורש תשומת לב"; bottom.appendChild(b);
@@ -313,6 +392,10 @@
         function buildBubble(m) {
             var d = document.createElement("div");
             d.className = "bubble " + (m.role || "customer") + (m.escalated ? " escalated" : "");
+            if (m.role === "agent") {
+                var s = document.createElement("span"); s.className = "sender"; s.textContent = "נציג";
+                d.appendChild(s);
+            }
             var t = document.createElement("span"); t.className = "text"; t.textContent = m.content || "";
             var meta = document.createElement("span"); meta.className = "meta"; meta.textContent = m.time_label || "";
             d.appendChild(t); d.appendChild(meta);
@@ -332,6 +415,93 @@
         // Jump to the latest message on first load, like WhatsApp.
         var initMsgs = document.getElementById("messages");
         if (initMsgs) { initMsgs.scrollTop = initMsgs.scrollHeight; }
+
+        // --- Bot takeover state + 24h window UI ---
+        function setBotState(paused) {
+            var pill = document.getElementById("botPill");
+            var btn = document.getElementById("handbackBtn");
+            if (pill) {
+                pill.className = "bot-pill " + (paused ? "paused" : "active");
+                pill.textContent = paused ? "🙋 שליטה ידנית" : "🤖 הבוט עונה";
+            }
+            if (btn) { btn.hidden = !paused; }
+        }
+        function setWindow(open) {
+            var w = document.getElementById("windowWarn");
+            if (w) { w.hidden = !!open; }
+        }
+        function setOrder(ordered) {
+            var c = document.getElementById("orderChip");
+            if (c) { c.hidden = !ordered; }
+        }
+        // After a manual send/hand-back, trust the optimistic UI briefly so an
+        // in-flight poll with stale state can't flip it back.
+        var stateLockUntil = 0;
+        function lockState() { stateLockUntil = Date.now() + 5000; }
+
+        // --- Composer: send a manual reply ---
+        var sendForm = document.getElementById("sendForm");
+        var sendInput = document.getElementById("sendInput");
+        var sendBtn = document.getElementById("sendBtn");
+        var sendStatus = document.getElementById("sendStatus");
+        function autoGrow() {
+            if (!sendInput) return;
+            sendInput.style.height = "auto";
+            sendInput.style.height = Math.min(sendInput.scrollHeight, 120) + "px";
+        }
+        async function sendReply() {
+            if (!sendInput || !SELECTED) return;
+            var text = (sendInput.value || "").trim();
+            if (!text) return;
+            sendBtn.disabled = true; sendStatus.textContent = "";
+            try {
+                var r = await fetch("/admin/api/send", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ phone: SELECTED, text: text })
+                });
+                var data = await r.json();
+                if (r.ok && data.ok) {
+                    sendInput.value = ""; autoGrow();
+                    setBotState(true); lockState();
+                    poll();
+                } else {
+                    sendStatus.textContent = data.error || "השליחה נכשלה";
+                }
+            } catch (e) {
+                sendStatus.textContent = "שגיאת רשת בשליחה";
+            } finally {
+                sendBtn.disabled = false;
+                sendInput.focus();
+            }
+        }
+        if (sendForm) {
+            sendForm.addEventListener("submit", function (e) { e.preventDefault(); sendReply(); });
+        }
+        if (sendInput) {
+            sendInput.addEventListener("input", autoGrow);
+            sendInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); }
+            });
+        }
+
+        // --- Hand the conversation back to the bot ---
+        var handbackBtn = document.getElementById("handbackBtn");
+        async function handBack() {
+            if (!SELECTED) return;
+            try {
+                var r = await fetch("/admin/api/resume", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ phone: SELECTED })
+                });
+                var data = await r.json();
+                if (r.ok && data.ok) { setBotState(false); lockState(); }
+            } catch (e) { /* ignore */ }
+        }
+        if (handbackBtn) { handbackBtn.addEventListener("click", handBack); }
 
         // --- Live polling loop ---
         var lastConvJSON = null;
@@ -353,6 +523,9 @@
                     if (r2.ok) {
                         var d2 = await r2.json();
                         if (d2.messages) { renderMessages(d2.messages); }
+                        if (Date.now() > stateLockUntil && typeof d2.bot_paused !== "undefined") { setBotState(d2.bot_paused); }
+                        if (typeof d2.window_open !== "undefined") { setWindow(d2.window_open); }
+                        if (typeof d2.ordered !== "undefined") { setOrder(d2.ordered); }
                     }
                 } catch (e) { /* ignore */ }
             }

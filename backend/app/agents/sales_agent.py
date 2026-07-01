@@ -83,6 +83,7 @@ from ..tools.vector_store import search_knowledge_base
 from ..models.order import OrderData
 from ..services.whatsapp import whatsapp_service
 from ..services.memory import conversation_memory
+from ..services import conversation_store
 
 
 async def _search_products_info(query: str) -> str:
@@ -177,6 +178,12 @@ async def _save_order_internal(
         if success:
             # Mark order as completed to prevent duplicates
             conversation_memory.mark_order_completed(session_id)
+
+            # Flag the conversation as "ordered" so the admin dashboard can
+            # highlight it. Key by the WhatsApp number (the conversation id),
+            # which may differ from the phone the customer typed for delivery.
+            wa_phone = session_id[len("whatsapp_"):] if session_id.startswith("whatsapp_") else customer_phone
+            await conversation_store.set_ordered(wa_phone, True)
 
             # Save customer details so we don't ask again
             conversation_memory.save_customer_details(session_id, {

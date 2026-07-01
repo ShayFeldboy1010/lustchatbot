@@ -1,15 +1,19 @@
-"""Read-only, password-protected admin UI for viewing WhatsApp conversations."""
+"""Password-protected admin UI for viewing and replying to WhatsApp conversations."""
 
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from ..config import get_settings
 from ..services.mongodb import get_collection
+from ..services import conversation_store
+from ..services.whatsapp import whatsapp_service
 
 router = APIRouter(prefix="/admin", tags=["admin-ui"])
 
@@ -42,6 +46,34 @@ def _time_label(dt) -> str:
     return dt.strftime("%d/%m %H:%M") if dt else ""
 
 
+def _window_open(messages) -> bool:
+    """Whether WhatsApp's 24h free-form reply window is open for this chat.
+
+    True only if the customer sent an inbound message within the last 24 hours.
+    Outside that window WhatsApp rejects free-typed messages (templates only).
+    """
+    last_in = None
+    for m in messages:
+        if m.get("role") == "customer" and m.get("timestamp"):
+            ts = m["timestamp"]
+            if ts.tzinfo is not None:
+                ts = ts.replace(tzinfo=None)
+            if last_in is None or ts > last_in:
+                last_in = ts
+    if last_in is None:
+        return False
+    return (datetime.utcnow() - last_in) < timedelta(hours=24)
+
+
+class SendPayload(BaseModel):
+    phone: str
+    text: str
+
+
+class PhonePayload(BaseModel):
+    phone: str
+
+
 def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
     """Reject the request unless the password matches ADMIN_PASSWORD. Fails closed if unset."""
     settings = get_settings()
@@ -55,7 +87,10 @@ def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) ->
 
 
 async def _get_customers(collection):
-    """Return the conversation list (one row per customer), escalated pinned first."""
+    """Return the conversation list (one row per customer), escalated pinned first.
+
+    Each row is annotated with its control state (ordered) from conversation_state.
+    """
     pipeline = [
         {"$sort": {"timestamp": 1}},
         {"$group": {
@@ -68,7 +103,11 @@ async def _get_customers(collection):
         {"$sort": {"escalated": -1, "last_timestamp": -1}},
         {"$limit": MAX_CUSTOMERS},
     ]
-    return await collection.aggregate(pipeline).to_list(length=MAX_CUSTOMERS)
+    customers = await collection.aggregate(pipeline).to_list(length=MAX_CUSTOMERS)
+    states = await conversation_store.get_states([c["_id"] for c in customers])
+    for c in customers:
+        c["ordered"] = bool(states.get(c["_id"], {}).get("ordered"))
+    return customers
 
 
 @router.get("", response_class=HTMLResponse)
@@ -89,6 +128,9 @@ async def list_conversations(request: Request, _: None = Depends(require_admin_a
             "messages": [],
             "selected_phone": None,
             "selected_name": None,
+            "bot_paused": False,
+            "ordered": False,
+            "window_open": False,
             "error": error,
         },
     )
@@ -117,6 +159,8 @@ async def view_chat(phone: str, request: Request, _: None = Depends(require_admi
     if not selected_name:
         selected_name = next((c.get("name") for c in customers if c["_id"] == phone), None)
 
+    state = await conversation_store.get_state(phone)
+
     return templates.TemplateResponse(
         request,
         "admin_dashboard.html",
@@ -125,6 +169,9 @@ async def view_chat(phone: str, request: Request, _: None = Depends(require_admi
             "messages": messages,
             "selected_phone": phone,
             "selected_name": selected_name,
+            "bot_paused": bool(state.get("bot_paused")),
+            "ordered": bool(state.get("ordered")),
+            "window_open": _window_open(messages),
             "error": error,
         },
     )
@@ -148,6 +195,7 @@ async def api_conversations(_: None = Depends(require_admin_auth)):
                 "name": c.get("name") or "",
                 "last_message": c.get("last_message") or "",
                 "escalated": bool(c.get("escalated")),
+                "ordered": bool(c.get("ordered")),
                 "time_label": _time_label(c.get("last_timestamp")),
             }
             for c in customers
@@ -164,6 +212,7 @@ async def api_messages(phone: str, _: None = Depends(require_admin_auth)):
         messages.reverse()
     except Exception as e:
         return {"error": str(e), "messages": []}
+    state = await conversation_store.get_state(phone)
     return {
         "messages": [
             {
@@ -173,5 +222,49 @@ async def api_messages(phone: str, _: None = Depends(require_admin_auth)):
                 "time_label": _time_label(m.get("timestamp")),
             }
             for m in messages
-        ]
+        ],
+        "bot_paused": bool(state.get("bot_paused")),
+        "ordered": bool(state.get("ordered")),
+        "window_open": _window_open(messages),
     }
+
+
+# ---------------------------------------------------------------------------
+# Two-way messaging: reply to a customer and control the bot takeover state.
+# ---------------------------------------------------------------------------
+
+@router.post("/api/send")
+async def api_send(payload: SendPayload, _: None = Depends(require_admin_auth)):
+    """Send a manual WhatsApp reply and pause the bot for this customer."""
+    phone = (payload.phone or "").strip()
+    text = (payload.text or "").strip()
+    if not phone or not text:
+        return JSONResponse({"ok": False, "error": "חסר טקסט או מספר"}, status_code=400)
+
+    try:
+        resp = await whatsapp_service.send_text_message(phone, text)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"שגיאת שליחה: {e}"}, status_code=502)
+
+    # The Cloud API returns {"error": {...}} on failure (e.g. outside the 24h window).
+    if isinstance(resp, dict) and resp.get("error"):
+        err = resp["error"]
+        message = err.get("message") if isinstance(err, dict) else str(err)
+        return JSONResponse({"ok": False, "error": message or "השליחה נכשלה"}, status_code=502)
+
+    # Persist as a human/agent message (keep the customer's known name) and take
+    # this conversation over from the bot.
+    name = await conversation_store.get_last_known_name(phone)
+    await conversation_store.save_message(phone, name, "agent", text)
+    await conversation_store.set_bot_paused(phone, True)
+    return {"ok": True, "bot_paused": True}
+
+
+@router.post("/api/resume")
+async def api_resume(payload: PhonePayload, _: None = Depends(require_admin_auth)):
+    """Hand the conversation back to the bot."""
+    phone = (payload.phone or "").strip()
+    if not phone:
+        return JSONResponse({"ok": False, "error": "missing phone"}, status_code=400)
+    await conversation_store.set_bot_paused(phone, False)
+    return {"ok": True, "bot_paused": False}

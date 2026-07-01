@@ -85,6 +85,14 @@ async def receive_message(request: Request):
         # Use phone number as session ID for WhatsApp
         session_id = f"whatsapp_{sender}"
 
+        # Human takeover: if an owner is handling this chat from the admin panel,
+        # the bot stays silent. Still persist the incoming message so the owner
+        # sees it live in the dashboard.
+        if await conversation_store.is_bot_paused(sender):
+            await conversation_store.save_message(sender, sender_name, "customer", message_text)
+            print(f"Bot paused for {sender} (human takeover) — not replying")
+            return {"status": "ok", "bot": "paused"}
+
         # Check if user wants to restart conversation
         if message_text.strip() in ["התחל מחדש", "להתחיל מחדש", "התחלה מחדש"]:
             # Reset the session - remove from escalated and clear memory
