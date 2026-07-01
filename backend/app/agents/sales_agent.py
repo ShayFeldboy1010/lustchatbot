@@ -65,9 +65,11 @@ sales_agent = Agent(
     model_settings=ModelSettings(temperature=0.1)
 )
 
-# Fallback agent using Gemini 2.0 Flash (for when primary model fails)
+# Fallback agent using Gemini 3.1 Flash-Lite (for when primary model fails).
+# Verified working against the Google API; the previous 'gemini-2.0-flash'
+# returned 404 and would have failed instead of degrading gracefully.
 fallback_agent = Agent(
-    'google-gla:gemini-2.0-flash',
+    'google-gla:gemini-3.1-flash-lite',
     system_prompt=SALES_AGENT_SYSTEM_PROMPT,
     retries=2,
     deps_type=ChatDependencies,

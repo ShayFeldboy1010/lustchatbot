@@ -34,9 +34,8 @@ def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) ->
         )
 
 
-@router.get("", response_class=HTMLResponse)
-async def list_conversations(request: Request, _: None = Depends(require_admin_auth)):
-    collection = get_collection("conversations")
+async def _get_customers(collection):
+    """Return the conversation list (one row per customer), escalated pinned first."""
     pipeline = [
         {"$sort": {"timestamp": 1}},
         {"$group": {
@@ -49,8 +48,14 @@ async def list_conversations(request: Request, _: None = Depends(require_admin_a
         {"$sort": {"escalated": -1, "last_timestamp": -1}},
         {"$limit": MAX_CUSTOMERS},
     ]
+    return await collection.aggregate(pipeline).to_list(length=MAX_CUSTOMERS)
+
+
+@router.get("", response_class=HTMLResponse)
+async def list_conversations(request: Request, _: None = Depends(require_admin_auth)):
+    collection = get_collection("conversations")
     try:
-        customers = await collection.aggregate(pipeline).to_list(length=MAX_CUSTOMERS)
+        customers = await _get_customers(collection)
         error = None
     except Exception as e:
         customers = []
@@ -58,25 +63,48 @@ async def list_conversations(request: Request, _: None = Depends(require_admin_a
 
     return templates.TemplateResponse(
         request,
-        "admin_conversations.html",
-        {"customers": customers, "error": error},
+        "admin_dashboard.html",
+        {
+            "customers": customers,
+            "messages": [],
+            "selected_phone": None,
+            "selected_name": None,
+            "error": error,
+        },
     )
 
 
 @router.get("/chat/{phone}", response_class=HTMLResponse)
 async def view_chat(phone: str, request: Request, _: None = Depends(require_admin_auth)):
     collection = get_collection("conversations")
+    error = None
+    try:
+        customers = await _get_customers(collection)
+    except Exception as e:
+        customers = []
+        error = str(e)
+
     try:
         cursor = collection.find({"phone": phone}).sort("timestamp", -1).limit(MAX_MESSAGES)
         messages = await cursor.to_list(length=MAX_MESSAGES)
         messages.reverse()
-        error = None
     except Exception as e:
         messages = []
-        error = str(e)
+        error = error or str(e)
+
+    # Prefer the name stored on the messages; fall back to the sidebar row.
+    selected_name = next((m.get("name") for m in reversed(messages) if m.get("name")), None)
+    if not selected_name:
+        selected_name = next((c.get("name") for c in customers if c["_id"] == phone), None)
 
     return templates.TemplateResponse(
         request,
-        "admin_chat.html",
-        {"phone": phone, "messages": messages, "error": error},
+        "admin_dashboard.html",
+        {
+            "customers": customers,
+            "messages": messages,
+            "selected_phone": phone,
+            "selected_name": selected_name,
+            "error": error,
+        },
     )
