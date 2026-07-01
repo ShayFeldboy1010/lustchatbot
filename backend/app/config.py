@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = "lustbot_whatsapp_verify_2024"
     whatsapp_human_support_number: str = "972555193010"
 
+    # Admin panel (read-only chat viewer)
+    admin_password: str = ""
+
     # Application
     secret_key: str
     debug: bool = False
