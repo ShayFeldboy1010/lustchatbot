@@ -7,6 +7,7 @@ import uuid
 from ..services.whatsapp import whatsapp_service
 from ..agents.sales_agent import process_message
 from ..services.memory import conversation_memory
+from ..services import conversation_store
 from ..tools.escalation import send_whatsapp_escalation
 from ..agents.prompts import ESCALATION_CONFIRMED, ESCALATION_ASK_PHONE, ESCALATION_ASK_PROBLEM
 
@@ -95,6 +96,8 @@ async def receive_message(request: Request):
             await whatsapp_service.send_text_message(sender, WELCOME_MESSAGE)
             conversation_memory.add_message(session_id, "user", message_text)
             conversation_memory.add_message(session_id, "assistant", WELCOME_MESSAGE)
+            await conversation_store.save_message(sender, sender_name, "customer", message_text)
+            await conversation_store.save_message(sender, sender_name, "bot", WELCOME_MESSAGE)
             print(f"Session {session_id} reset by user request")
             return {"status": "ok"}
 
@@ -112,6 +115,8 @@ async def receive_message(request: Request):
             # Got the name, now ask for phone
             conversation_memory.set_escalation_state(session_id, 'waiting_phone', {'name': message_text})
             await whatsapp_service.send_text_message(sender, ESCALATION_ASK_PHONE)
+            await conversation_store.save_message(sender, sender_name, "customer", message_text, escalated=True)
+            await conversation_store.save_message(sender, sender_name, "bot", ESCALATION_ASK_PHONE)
             print(f"Escalation: Got name '{message_text}' for {sender}, asking for phone")
             return {"status": "ok"}
 
@@ -119,6 +124,8 @@ async def receive_message(request: Request):
             # Got the phone, now ask for problem
             conversation_memory.set_escalation_state(session_id, 'waiting_problem', {'phone': message_text})
             await whatsapp_service.send_text_message(sender, ESCALATION_ASK_PROBLEM)
+            await conversation_store.save_message(sender, sender_name, "customer", message_text, escalated=True)
+            await conversation_store.save_message(sender, sender_name, "bot", ESCALATION_ASK_PROBLEM)
             print(f"Escalation: Got phone '{message_text}' for {sender}, asking for problem")
             return {"status": "ok"}
 
@@ -141,6 +148,8 @@ async def receive_message(request: Request):
 
             # Send confirmation to customer
             await whatsapp_service.send_text_message(sender, ESCALATION_CONFIRMED)
+            await conversation_store.save_message(sender, sender_name, "customer", message_text, escalated=True)
+            await conversation_store.save_message(sender, sender_name, "bot", ESCALATION_CONFIRMED)
             print(f"Escalation completed for {sender}: name={customer_name}, phone={customer_phone}, problem={message_text}")
             return {"status": "ok"}
 
@@ -184,6 +193,8 @@ async def receive_message(request: Request):
                 problem_description=f"הגיע למכסת 20 הודעות ב-24 שעות - הועבר אוטומטית\n\nהודעה אחרונה: {message_text}\n\nסיכום שיחה:\n{conversation_summary}"
             )
 
+            await conversation_store.save_message(sender, sender_name, "customer", message_text, escalated=True)
+            await conversation_store.save_message(sender, sender_name, "bot", MAX_MESSAGES_ESCALATION_TEXT)
             print(f"Session {session_id} reached {user_message_count_24h} messages in 24h - escalated to human")
             return {"status": "ok"}
 
@@ -195,6 +206,8 @@ async def receive_message(request: Request):
 
             # Send welcome message
             await whatsapp_service.send_text_message(sender, WELCOME_MESSAGE)
+            await conversation_store.save_message(sender, sender_name, "customer", message_text)
+            await conversation_store.save_message(sender, sender_name, "bot", WELCOME_MESSAGE)
             print(f"Sent welcome message to new user {sender}")
             return {"status": "ok"}
 
@@ -208,6 +221,8 @@ async def receive_message(request: Request):
         # Update conversation history
         conversation_memory.add_message(session_id, "user", message_text)
         conversation_memory.add_message(session_id, "assistant", result.response)
+        await conversation_store.save_message(sender, sender_name, "customer", message_text, escalated=result.needs_escalation)
+        await conversation_store.save_message(sender, sender_name, "bot", result.response)
 
         # Handle escalation - start multi-step collection (name → phone → problem)
         if result.needs_escalation:
