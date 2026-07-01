@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+import asyncio
 import os
 
 from .config import get_settings
@@ -20,7 +21,12 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting E-Commerce Chatbot API...")
     print(f"📊 Debug mode: {settings.debug}")
-    await conversation_store.ensure_indexes()
+    # Create indexes in the background — never block startup on MongoDB.
+    # uvicorn binds the listening port only AFTER lifespan startup returns, so
+    # awaiting a slow/unreachable MongoDB here would delay the port bind past the
+    # host's port-scan window and fail the deploy. ensure_indexes swallows its
+    # own errors, so a failed background run is harmless.
+    app.state.index_task = asyncio.create_task(conversation_store.ensure_indexes())
 
     yield
 

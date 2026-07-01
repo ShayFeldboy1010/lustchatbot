@@ -20,7 +20,9 @@ def get_sync_client() -> MongoClient:
     global _sync_client
 
     if _sync_client is None:
-        _sync_client = MongoClient(settings.mongodb_uri)
+        # Fail fast (5s) rather than the 30s default so a slow/unreachable
+        # MongoDB degrades gracefully instead of blocking callers.
+        _sync_client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
 
     return _sync_client
 
@@ -30,7 +32,10 @@ def get_async_client() -> AsyncIOMotorClient:
     global _async_client
 
     if _async_client is None:
-        _async_client = AsyncIOMotorClient(settings.mongodb_uri)
+        # Fail fast (5s) rather than the 30s default so a slow/unreachable
+        # MongoDB never blocks the request path (webhook persistence is
+        # best-effort) or startup index creation.
+        _async_client = AsyncIOMotorClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
 
     return _async_client
 
