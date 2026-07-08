@@ -3,6 +3,7 @@
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -40,10 +41,29 @@ def avatar_color(phone) -> str:
 
 templates.env.filters["avatar_color"] = avatar_color
 
+# Customers are in Israel; timestamps are stored as naive UTC (Mongo driver
+# default). Convert to local Israel time before ever displaying a timestamp.
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
-def _time_label(dt) -> str:
-    """Format a timestamp exactly as the template does, for live JSON updates."""
-    return dt.strftime("%d/%m %H:%M") if dt else ""
+
+def _to_israel(dt):
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ISRAEL_TZ)
+
+
+def israel_time_label(dt) -> str:
+    """Format a stored (UTC) timestamp as Israel local time, for template + JSON use."""
+    local = _to_israel(dt)
+    return local.strftime("%d/%m %H:%M") if local else ""
+
+
+templates.env.filters["il_time"] = israel_time_label
+
+# Kept as an alias so existing call sites (JSON endpoints) read naturally.
+_time_label = israel_time_label
 
 
 def _window_open(messages) -> bool:
@@ -87,7 +107,9 @@ def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) ->
 
 
 async def _get_customers(collection):
-    """Return the conversation list (one row per customer), escalated pinned first.
+    """Return the conversation list (one row per customer), grouped:
+    escalated ("needs attention") first, then ordered ("reservations"), then
+    everything else — each group sorted by most recent activity.
 
     Each row is annotated with its control state (ordered) from conversation_state.
     """
@@ -107,7 +129,26 @@ async def _get_customers(collection):
     states = await conversation_store.get_states([c["_id"] for c in customers])
     for c in customers:
         c["ordered"] = bool(states.get(c["_id"], {}).get("ordered"))
+
+    def sort_key(c):
+        ts = c.get("last_timestamp")
+        ts_value = ts.timestamp() if ts else 0
+        return (
+            0 if c.get("escalated") else 1,
+            0 if c.get("ordered") else 1,
+            -ts_value,
+        )
+
+    customers.sort(key=sort_key)
     return customers
+
+
+def _group_customers(customers):
+    """Split an already-sorted customer list into the three sidebar sections."""
+    escalated = [c for c in customers if c.get("escalated")]
+    reservations = [c for c in customers if not c.get("escalated") and c.get("ordered")]
+    others = [c for c in customers if not c.get("escalated") and not c.get("ordered")]
+    return escalated, reservations, others
 
 
 @router.get("", response_class=HTMLResponse)
@@ -120,11 +161,16 @@ async def list_conversations(request: Request, _: None = Depends(require_admin_a
         customers = []
         error = str(e)
 
+    escalated_customers, reservation_customers, other_customers = _group_customers(customers)
+
     return templates.TemplateResponse(
         request,
         "admin_dashboard.html",
         {
             "customers": customers,
+            "escalated_customers": escalated_customers,
+            "reservation_customers": reservation_customers,
+            "other_customers": other_customers,
             "messages": [],
             "selected_phone": None,
             "selected_name": None,
@@ -160,12 +206,16 @@ async def view_chat(phone: str, request: Request, _: None = Depends(require_admi
         selected_name = next((c.get("name") for c in customers if c["_id"] == phone), None)
 
     state = await conversation_store.get_state(phone)
+    escalated_customers, reservation_customers, other_customers = _group_customers(customers)
 
     return templates.TemplateResponse(
         request,
         "admin_dashboard.html",
         {
             "customers": customers,
+            "escalated_customers": escalated_customers,
+            "reservation_customers": reservation_customers,
+            "other_customers": other_customers,
             "messages": messages,
             "selected_phone": phone,
             "selected_name": selected_name,

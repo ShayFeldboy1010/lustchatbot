@@ -99,6 +99,24 @@
         }
         .empty-list { text-align: center; color: var(--wa-sub); padding: 40px 20px; }
 
+        /* ---------- Collapsible sidebar sections ---------- */
+        .section-header { background: #f7f8f8; border-bottom: 1px solid var(--wa-border); }
+        .section-toggle {
+            width: 100%; display: flex; align-items: center; gap: 8px;
+            padding: 9px 15px; border: 0; background: none; cursor: pointer;
+            font: inherit; text-align: inherit; color: var(--wa-sub);
+        }
+        .section-toggle .chevron {
+            font-size: 11px; transition: transform .15s ease; display: inline-block;
+        }
+        .section-toggle[aria-expanded="false"] .chevron { transform: rotate(-90deg); }
+        .section-toggle .section-title { font-size: 13px; font-weight: 700; letter-spacing: .2px; }
+        .section-toggle .section-count {
+            background: #dfe3e5; color: var(--wa-text); font-size: 11px; font-weight: 600;
+            padding: 1px 8px; border-radius: 10px;
+        }
+        .section-group.collapsed { display: none; }
+
         /* ---------- Chat pane ---------- */
         .chat {
             flex: 1;
@@ -230,8 +248,7 @@
                 <input id="search" type="text" placeholder="חיפוש לפי שם או מספר…" autocomplete="off">
             </div>
             {% if error %}<div class="error">שגיאה בטעינת השיחות: {{ error }}</div>{% endif %}
-            <div class="conv-list" id="convList">
-                {% for c in customers %}
+            {% macro conv_row(c) %}
                 <a class="conv-row {% if c._id == selected_phone %}active{% endif %}{% if c.ordered %} ordered{% endif %}"
                    href="/admin/chat/{{ c._id }}"
                    data-search="{{ (c.name or '')|lower }} {{ c._id|lower }}">
@@ -242,7 +259,7 @@
                         <div class="conv-top">
                             <span class="conv-name">{{ c.name or c._id }}</span>
                             <span class="conv-time {% if c.escalated %}alert{% endif %}">
-                                {{ c.last_timestamp.strftime("%d/%m %H:%M") if c.last_timestamp else "" }}
+                                {{ c.last_timestamp|il_time }}
                             </span>
                         </div>
                         <div class="conv-bottom">
@@ -252,7 +269,33 @@
                         </div>
                     </div>
                 </a>
-                {% endfor %}
+            {% endmacro %}
+            <div class="conv-list" id="convList">
+                {% if escalated_customers %}
+                <div class="section-header" data-section="attention">
+                    <button type="button" class="section-toggle" aria-expanded="true">
+                        <span class="chevron">▾</span>
+                        <span class="section-title">דורש תשומת לב</span>
+                        <span class="section-count">{{ escalated_customers|length }}</span>
+                    </button>
+                </div>
+                <div class="section-group" data-section-group="attention">
+                    {% for c in escalated_customers %}{{ conv_row(c) }}{% endfor %}
+                </div>
+                {% endif %}
+                {% if reservation_customers %}
+                <div class="section-header" data-section="reservations">
+                    <button type="button" class="section-toggle" aria-expanded="true">
+                        <span class="chevron">▾</span>
+                        <span class="section-title">הזמנות</span>
+                        <span class="section-count">{{ reservation_customers|length }}</span>
+                    </button>
+                </div>
+                <div class="section-group" data-section-group="reservations">
+                    {% for c in reservation_customers %}{{ conv_row(c) }}{% endfor %}
+                </div>
+                {% endif %}
+                {% for c in other_customers %}{{ conv_row(c) }}{% endfor %}
                 {% if not customers and not error %}
                 <div class="empty-list">אין עדיין שיחות</div>
                 {% endif %}
@@ -284,7 +327,7 @@
                 <div class="bubble {{ m.role }}{% if m.escalated %} escalated{% endif %}">
                     {% if m.role == 'agent' %}<span class="sender">נציג</span>{% endif %}
                     <span class="text">{{ m.content }}</span>
-                    <span class="meta">{{ m.timestamp.strftime("%d/%m %H:%M") if m.timestamp else "" }}</span>
+                    <span class="meta">{{ m.timestamp|il_time }}</span>
                 </div>
                 {% endfor %}
                 {% if not messages and not error %}
@@ -331,8 +374,84 @@
                           (row.querySelector(".conv-preview")?.textContent || "").toLowerCase();
                 row.style.display = hay.indexOf(q) === -1 ? "none" : "";
             });
+            document.querySelectorAll(".section-header").forEach(function (h) {
+                var group = h.nextElementSibling;
+                if (!group) return;
+                var anyVisible = Array.prototype.some.call(group.querySelectorAll(".conv-row"), function (r) {
+                    return r.style.display !== "none";
+                });
+                h.style.display = anyVisible ? "" : "none";
+            });
         }
         if (search) { search.addEventListener("input", applyFilter); }
+
+        // --- Collapsible sidebar sections ("needs attention" / "reservations") ---
+        var SECTION_LABELS = { attention: "דורש תשומת לב", reservations: "הזמנות" };
+        var SECTION_STORAGE_PREFIX = "admin_section_collapsed_";
+        function isSectionCollapsed(key) {
+            try { return localStorage.getItem(SECTION_STORAGE_PREFIX + key) === "1"; } catch (e) { return false; }
+        }
+        function setSectionCollapsed(key, collapsed) {
+            try { localStorage.setItem(SECTION_STORAGE_PREFIX + key, collapsed ? "1" : "0"); } catch (e) { /* ignore */ }
+        }
+        function bindSectionToggle(headerEl) {
+            var btn = headerEl.querySelector(".section-toggle");
+            var key = headerEl.getAttribute("data-section");
+            var group = headerEl.nextElementSibling;
+            if (!btn || !group) return;
+            btn.addEventListener("click", function () {
+                var collapsed = group.classList.toggle("collapsed");
+                btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+                setSectionCollapsed(key, collapsed);
+            });
+        }
+        function buildSectionHeader(key, count) {
+            var collapsed = isSectionCollapsed(key);
+            var header = document.createElement("div");
+            header.className = "section-header";
+            header.setAttribute("data-section", key);
+            var btn = document.createElement("button");
+            btn.type = "button"; btn.className = "section-toggle";
+            btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+            var chevron = document.createElement("span"); chevron.className = "chevron"; chevron.textContent = "▾";
+            var title = document.createElement("span"); title.className = "section-title"; title.textContent = SECTION_LABELS[key];
+            var countEl = document.createElement("span"); countEl.className = "section-count"; countEl.textContent = count;
+            btn.appendChild(chevron); btn.appendChild(title); btn.appendChild(countEl);
+            header.appendChild(btn);
+            return header;
+        }
+        // Apply any saved collapse state to the server-rendered sections and wire up toggles.
+        document.querySelectorAll(".section-header").forEach(function (h) {
+            var key = h.getAttribute("data-section");
+            var group = h.nextElementSibling;
+            if (group && isSectionCollapsed(key)) {
+                group.classList.add("collapsed");
+                var btn = h.querySelector(".section-toggle");
+                if (btn) btn.setAttribute("aria-expanded", "false");
+            }
+            bindSectionToggle(h);
+        });
+        function partitionCustomers(customers) {
+            var escalated = [], reservations = [], others = [];
+            customers.forEach(function (c) {
+                if (c.escalated) { escalated.push(c); }
+                else if (c.ordered) { reservations.push(c); }
+                else { others.push(c); }
+            });
+            return { escalated: escalated, reservations: reservations, others: others };
+        }
+        function appendSection(list, key, items) {
+            if (!items.length) return;
+            var header = buildSectionHeader(key, items.length);
+            var group = document.createElement("div");
+            group.className = "section-group";
+            group.setAttribute("data-section-group", key);
+            if (isSectionCollapsed(key)) { group.classList.add("collapsed"); }
+            items.forEach(function (c) { group.appendChild(buildRow(c)); });
+            list.appendChild(header);
+            list.appendChild(group);
+            bindSectionToggle(header);
+        }
 
         // --- Build one sidebar row (textContent everywhere = XSS-safe) ---
         function buildRow(c) {
@@ -381,7 +500,10 @@
                 empty.className = "empty-list"; empty.textContent = "אין עדיין שיחות";
                 list.appendChild(empty);
             } else {
-                customers.forEach(function (c) { list.appendChild(buildRow(c)); });
+                var groups = partitionCustomers(customers);
+                appendSection(list, "attention", groups.escalated);
+                appendSection(list, "reservations", groups.reservations);
+                groups.others.forEach(function (c) { list.appendChild(buildRow(c)); });
             }
             var count = document.getElementById("convCount");
             if (count) { count.textContent = customers.length; }
