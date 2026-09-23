@@ -97,6 +97,22 @@
             background: var(--wa-green); color: #fff; font-size: 11px; font-weight: 600;
             padding: 2px 8px; border-radius: 12px; flex-shrink: 0; white-space: nowrap;
         }
+        .badge-paused { font-size: 13px; flex-shrink: 0; }
+        .badge-card {
+            background: #e8f0fe; color: #1a56c4; font-size: 11px; font-weight: 600;
+            padding: 2px 8px; border-radius: 12px; flex-shrink: 0; white-space: nowrap;
+        }
+        /* Row check mark: mark handled (or, in the "done" section, undo). */
+        .done-btn {
+            flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; cursor: pointer;
+            color: var(--wa-sub); background: #f0f2f5; opacity: 0; transition: opacity .12s;
+        }
+        .conv-row:hover .done-btn, .done-btn:focus { opacity: 1; }
+        .done-btn:hover { background: var(--wa-green); color: #fff; }
+        .conv-row.done { opacity: .7; }
+        @media (hover: none) { .done-btn { opacity: 1; } }
         .empty-list { text-align: center; color: var(--wa-sub); padding: 40px 20px; }
 
         /* ---------- Collapsible sidebar sections ---------- */
@@ -116,6 +132,8 @@
             padding: 1px 8px; border-radius: 10px;
         }
         .section-group.collapsed { display: none; }
+        /* While searching, show matches even inside collapsed sections. */
+        .conv-list.searching .section-group.collapsed { display: block; }
 
         /* ---------- Chat pane ---------- */
         .chat {
@@ -189,6 +207,12 @@
         }
         .handback-btn:hover { background: var(--wa-green-dark); }
         .handback-btn[hidden] { display: none; }
+        .handled-btn {
+            font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+            border: 1px solid var(--wa-green); background: #fff; color: var(--wa-green-dark);
+            padding: 5px 12px; border-radius: 20px; white-space: nowrap;
+        }
+        .handled-btn.is-done { background: var(--wa-green); color: #fff; }
         .order-chip {
             display: inline-flex; align-items: center; gap: 6px;
             font-size: 12.5px; font-weight: 600; padding: 5px 12px;
@@ -249,7 +273,7 @@
             </div>
             {% if error %}<div class="error">שגיאה בטעינת השיחות: {{ error }}</div>{% endif %}
             {% macro conv_row(c) %}
-                <a class="conv-row {% if c._id == selected_phone %}active{% endif %}{% if c.ordered %} ordered{% endif %}"
+                <a class="conv-row {% if c._id == selected_phone %}active{% endif %}{% if c.ordered %} ordered{% endif %}{% if c.section == 'done' %} done{% endif %}"
                    href="/admin/chat/{{ c._id }}"
                    data-search="{{ (c.name or '')|lower }} {{ c._id|lower }}">
                     <div class="avatar" style="background: {{ c._id|avatar_color }}">
@@ -258,44 +282,38 @@
                     <div class="conv-body">
                         <div class="conv-top">
                             <span class="conv-name">{{ c.name or c._id }}</span>
-                            <span class="conv-time {% if c.escalated %}alert{% endif %}">
+                            <span class="conv-time {% if c.section == 'attention' %}alert{% endif %}">
                                 {{ c.last_timestamp|il_time }}
                             </span>
                         </div>
                         <div class="conv-bottom">
                             <span class="conv-preview">{{ c.last_message }}</span>
-                            {% if c.ordered %}<span class="badge-order">🛒 הזמנה</span>{% endif %}
-                            {% if c.escalated %}<span class="badge">דורש תשומת לב</span>{% endif %}
+                            {% if c.bot_paused %}<span class="badge-paused" title="שליטה ידנית - הבוט לא עונה">🙋</span>{% endif %}
+                            {% if c.ordered %}<span class="badge-order">🛒 הזמנה</span>
+                            {% elif c.last_card_link_at %}<span class="badge-card">💳 קישור</span>{% endif %}
+                            {% if c.section == 'attention' %}<span class="badge">דורש תשומת לב</span>{% endif %}
+                            {% if c.section == 'done' %}
+                            <span class="done-btn" role="button" tabindex="0" data-phone="{{ c._id }}" data-handled="1" title="החזר לרשימה">↺</span>
+                            {% else %}
+                            <span class="done-btn" role="button" tabindex="0" data-phone="{{ c._id }}" data-handled="0" title="סמן כטופל">✓</span>
+                            {% endif %}
                         </div>
                     </div>
                 </a>
             {% endmacro %}
             <div class="conv-list" id="convList">
-                {% if escalated_customers %}
-                <div class="section-header" data-section="attention">
+                {% for key, label, items in sections if items %}
+                <div class="section-header" data-section="{{ key }}">
                     <button type="button" class="section-toggle" aria-expanded="true">
                         <span class="chevron">▾</span>
-                        <span class="section-title">דורש תשומת לב</span>
-                        <span class="section-count">{{ escalated_customers|length }}</span>
+                        <span class="section-title">{{ label }}</span>
+                        <span class="section-count">{{ items|length }}</span>
                     </button>
                 </div>
-                <div class="section-group" data-section-group="attention">
-                    {% for c in escalated_customers %}{{ conv_row(c) }}{% endfor %}
+                <div class="section-group" data-section-group="{{ key }}">
+                    {% for c in items %}{{ conv_row(c) }}{% endfor %}
                 </div>
-                {% endif %}
-                {% if reservation_customers %}
-                <div class="section-header" data-section="reservations">
-                    <button type="button" class="section-toggle" aria-expanded="true">
-                        <span class="chevron">▾</span>
-                        <span class="section-title">הזמנות</span>
-                        <span class="section-count">{{ reservation_customers|length }}</span>
-                    </button>
-                </div>
-                <div class="section-group" data-section-group="reservations">
-                    {% for c in reservation_customers %}{{ conv_row(c) }}{% endfor %}
-                </div>
-                {% endif %}
-                {% for c in other_customers %}{{ conv_row(c) }}{% endfor %}
+                {% endfor %}
                 {% if not customers and not error %}
                 <div class="empty-list">אין עדיין שיחות</div>
                 {% endif %}
@@ -319,6 +337,7 @@
                         {% if bot_paused %}🙋 שליטה ידנית{% else %}🤖 הבוט עונה{% endif %}
                     </span>
                     <button class="handback-btn" id="handbackBtn" {% if not bot_paused %}hidden{% endif %}>↩︎ החזר לבוט</button>
+                    <button class="handled-btn{% if handled %} is-done{% endif %}" id="handledBtn">{% if handled %}✓ טופל{% else %}✓ סמן כטופל{% endif %}</button>
                 </div>
             </div>
             {% if error %}<div class="error">שגיאה בטעינת השיחה: {{ error }}</div>{% endif %}
@@ -336,7 +355,7 @@
             </div>
             <div class="composer">
                 <div class="window-warn" id="windowWarn" {% if window_open %}hidden{% endif %}>
-                    ⏰ חלון 24 השעות סגור — WhatsApp יאפשר לשלוח שוב רק אחרי שהלקוח יכתוב הודעה חדשה.
+                    ⏰ חלון 24 השעות סגור - WhatsApp יאפשר לשלוח שוב רק אחרי שהלקוח יכתוב הודעה חדשה.
                 </div>
                 <form id="sendForm" autocomplete="off">
                     <textarea id="sendInput" rows="1" placeholder="כתוב תשובה ללקוח…"></textarea>
@@ -348,7 +367,7 @@
             <div class="placeholder">
                 <div class="icon">💬</div>
                 <h2>בחר שיחה כדי לקרוא את ההתכתבות</h2>
-                <p>כאן יוצגו השיחות של הלקוחות ב־WhatsApp. שיחות שדורשות תשומת לב יופיעו למעלה.</p>
+                <p>שיחה שסומנה ✓ עוברת ל"טופלו", וחוזרת לבד אם הלקוח כותב שוב.</p>
             </div>
             {% endif %}
         </main>
@@ -369,6 +388,8 @@
         var search = document.getElementById("search");
         function applyFilter() {
             var q = (search ? search.value : "").trim().toLowerCase();
+            var list = document.getElementById("convList");
+            if (list) { list.classList.toggle("searching", q !== ""); }
             document.querySelectorAll("#convList .conv-row").forEach(function (row) {
                 var hay = (row.getAttribute("data-search") || "") + " " +
                           (row.querySelector(".conv-preview")?.textContent || "").toLowerCase();
@@ -385,11 +406,24 @@
         }
         if (search) { search.addEventListener("input", applyFilter); }
 
-        // --- Collapsible sidebar sections ("needs attention" / "reservations") ---
-        var SECTION_LABELS = { attention: "דורש תשומת לב", reservations: "הזמנות" };
+        // --- Collapsible sidebar sections. Keep in sync with SECTIONS in admin_ui.py ---
+        var SECTIONS = [
+            ["attention", "דורש תשומת לב"],
+            ["orders", "סגרו הזמנה ב-WhatsApp"],
+            ["card_link", "קיבלו קישור לתשלום באשראי"],
+            ["active", "שיחות פעילות"],
+            ["older", "שיחות קודמות"],
+            ["done", "טופלו ✓"]
+        ];
+        var SECTION_LABELS = {};
+        SECTIONS.forEach(function (s) { SECTION_LABELS[s[0]] = s[1]; });
         var SECTION_STORAGE_PREFIX = "admin_section_collapsed_";
+        // Long, rarely needed sections start collapsed until toggled.
+        var COLLAPSED_BY_DEFAULT = { older: true, done: true };
         function isSectionCollapsed(key) {
-            try { return localStorage.getItem(SECTION_STORAGE_PREFIX + key) === "1"; } catch (e) { return false; }
+            var saved = null;
+            try { saved = localStorage.getItem(SECTION_STORAGE_PREFIX + key); } catch (e) { /* ignore */ }
+            return saved === null ? !!COLLAPSED_BY_DEFAULT[key] : saved === "1";
         }
         function setSectionCollapsed(key, collapsed) {
             try { localStorage.setItem(SECTION_STORAGE_PREFIX + key, collapsed ? "1" : "0"); } catch (e) { /* ignore */ }
@@ -432,13 +466,10 @@
             bindSectionToggle(h);
         });
         function partitionCustomers(customers) {
-            var escalated = [], reservations = [], others = [];
-            customers.forEach(function (c) {
-                if (c.escalated) { escalated.push(c); }
-                else if (c.ordered) { reservations.push(c); }
-                else { others.push(c); }
-            });
-            return { escalated: escalated, reservations: reservations, others: others };
+            var groups = {};
+            SECTIONS.forEach(function (s) { groups[s[0]] = []; });
+            customers.forEach(function (c) { (groups[c.section] || groups.older).push(c); });
+            return groups;
         }
         function appendSection(list, key, items) {
             if (!items.length) return;
@@ -456,7 +487,8 @@
         // --- Build one sidebar row (textContent everywhere = XSS-safe) ---
         function buildRow(c) {
             var a = document.createElement("a");
-            a.className = "conv-row" + (c.phone === SELECTED ? " active" : "") + (c.ordered ? " ordered" : "");
+            a.className = "conv-row" + (c.phone === SELECTED ? " active" : "") + (c.ordered ? " ordered" : "") +
+                (c.section === "done" ? " done" : "");
             a.href = "/admin/chat/" + encodeURIComponent(c.phone);
             a.setAttribute("data-search", ((c.name || "") + " " + c.phone).toLowerCase());
 
@@ -470,7 +502,7 @@
             var name = document.createElement("span"); name.className = "conv-name";
             name.textContent = c.name || c.phone;
             var time = document.createElement("span");
-            time.className = "conv-time" + (c.escalated ? " alert" : "");
+            time.className = "conv-time" + (c.section === "attention" ? " alert" : "");
             time.textContent = c.time_label || "";
             top.appendChild(name); top.appendChild(time);
 
@@ -478,14 +510,29 @@
             var prev = document.createElement("span"); prev.className = "conv-preview";
             prev.textContent = c.last_message || "";
             bottom.appendChild(prev);
+            if (c.bot_paused) {
+                var pb = document.createElement("span"); pb.className = "badge-paused";
+                pb.title = "שליטה ידנית - הבוט לא עונה"; pb.textContent = "🙋"; bottom.appendChild(pb);
+            }
             if (c.ordered) {
                 var ob = document.createElement("span"); ob.className = "badge-order";
                 ob.textContent = "🛒 הזמנה"; bottom.appendChild(ob);
+            } else if (c.card_link) {
+                var cb = document.createElement("span"); cb.className = "badge-card";
+                cb.textContent = "💳 קישור"; bottom.appendChild(cb);
             }
-            if (c.escalated) {
+            if (c.section === "attention") {
                 var b = document.createElement("span"); b.className = "badge";
                 b.textContent = "דורש תשומת לב"; bottom.appendChild(b);
             }
+            var isDone = c.section === "done";
+            var db = document.createElement("span"); db.className = "done-btn";
+            db.setAttribute("role", "button"); db.tabIndex = 0;
+            db.setAttribute("data-phone", c.phone);
+            db.setAttribute("data-handled", isDone ? "1" : "0");
+            db.title = isDone ? "החזר לרשימה" : "סמן כטופל";
+            db.textContent = isDone ? "↺" : "✓";
+            bottom.appendChild(db);
             body.appendChild(top); body.appendChild(bottom);
             a.appendChild(av); a.appendChild(body);
             return a;
@@ -501,9 +548,7 @@
                 list.appendChild(empty);
             } else {
                 var groups = partitionCustomers(customers);
-                appendSection(list, "attention", groups.escalated);
-                appendSection(list, "reservations", groups.reservations);
-                groups.others.forEach(function (c) { list.appendChild(buildRow(c)); });
+                SECTIONS.forEach(function (s) { appendSection(list, s[0], groups[s[0]]); });
             }
             var count = document.getElementById("convCount");
             if (count) { count.textContent = customers.length; }
@@ -625,6 +670,50 @@
         }
         if (handbackBtn) { handbackBtn.addEventListener("click", handBack); }
 
+        // --- Mark handled (✓) from a sidebar row or the chat header ---
+        function setHandledBtn(handled) {
+            var b = document.getElementById("handledBtn");
+            if (!b) return;
+            b.classList.toggle("is-done", !!handled);
+            b.textContent = handled ? "✓ טופל" : "✓ סמן כטופל";
+            b.setAttribute("data-handled", handled ? "1" : "0");
+        }
+        async function setHandled(phone, handled) {
+            try {
+                var r = await fetch("/admin/api/handled", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ phone: phone, handled: handled })
+                });
+                var data = await r.json();
+                if (r.ok && data.ok) {
+                    if (phone === SELECTED) { setHandledBtn(handled); lockState(); }
+                    poll();
+                }
+            } catch (e) { /* ignore - next poll shows the real state */ }
+        }
+        var convList = document.getElementById("convList");
+        function onRowDoneBtn(e) {
+            var btn = e.target.closest ? e.target.closest(".done-btn") : null;
+            if (!btn) return;
+            if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+            // The button sits inside the row link: don't open the chat.
+            e.preventDefault(); e.stopPropagation();
+            setHandled(btn.getAttribute("data-phone"), btn.getAttribute("data-handled") !== "1");
+        }
+        if (convList) {
+            convList.addEventListener("click", onRowDoneBtn);
+            convList.addEventListener("keydown", onRowDoneBtn);
+        }
+        var handledBtn = document.getElementById("handledBtn");
+        if (handledBtn) {
+            handledBtn.setAttribute("data-handled", handledBtn.classList.contains("is-done") ? "1" : "0");
+            handledBtn.addEventListener("click", function () {
+                setHandled(SELECTED, handledBtn.getAttribute("data-handled") !== "1");
+            });
+        }
+
         // --- Live polling loop ---
         var lastConvJSON = null;
         async function poll() {
@@ -637,7 +726,7 @@
                         if (sig !== lastConvJSON) { lastConvJSON = sig; renderSidebar(data.customers); }
                     }
                 }
-            } catch (e) { /* transient network error — try again next tick */ }
+            } catch (e) { /* transient network error - try again next tick */ }
 
             if (SELECTED) {
                 try {
@@ -646,6 +735,7 @@
                         var d2 = await r2.json();
                         if (d2.messages) { renderMessages(d2.messages); }
                         if (Date.now() > stateLockUntil && typeof d2.bot_paused !== "undefined") { setBotState(d2.bot_paused); }
+                        if (Date.now() > stateLockUntil && typeof d2.handled !== "undefined") { setHandledBtn(d2.handled); }
                         if (typeof d2.window_open !== "undefined") { setWindow(d2.window_open); }
                         if (typeof d2.ordered !== "undefined") { setOrder(d2.ordered); }
                     }

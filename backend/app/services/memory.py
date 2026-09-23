@@ -106,6 +106,11 @@ class ConversationMemory:
             messages = self._sessions[session_id].get('messages', [])
             now = datetime.now()
             cutoff = now - timedelta(hours=24)
+            # After a human hands the chat back, start the count fresh so the
+            # bot doesn't immediately re-escalate on the next message.
+            reset_at = self._sessions[session_id].get('limit_reset_at')
+            if reset_at and reset_at > cutoff:
+                cutoff = reset_at
 
             count = 0
             for msg in messages:
@@ -123,6 +128,12 @@ class ConversationMemory:
                         count += 1  # Count if no timestamp
 
             return count
+
+    def reset_message_limit(self, session_id: str) -> None:
+        """Restart the 24h message-limit count from now (history is kept)."""
+        with self._lock:
+            if session_id in self._sessions:
+                self._sessions[session_id]['limit_reset_at'] = datetime.now()
 
     def save_customer_details(self, session_id: str, details: dict) -> None:
         """Save customer details after order confirmation"""

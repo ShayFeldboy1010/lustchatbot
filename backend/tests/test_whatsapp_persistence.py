@@ -59,7 +59,10 @@ def main() -> int:
 
     with patch.object(whatsapp.whatsapp_service, "send_text_message", new=AsyncMock(return_value={})), \
          patch.object(whatsapp.whatsapp_service, "mark_as_read", new=AsyncMock(return_value=None)), \
-         patch("app.services.conversation_store.save_message", new=AsyncMock()) as mock_save:
+         patch("app.services.conversation_store.save_message", new=AsyncMock()) as mock_save, \
+         patch("app.services.conversation_store.get_state", new=AsyncMock(return_value={})) as mock_state, \
+         patch("app.services.conversation_store.set_bot_paused", new=AsyncMock()) as mock_pause, \
+         patch("app.routers.whatsapp.send_whatsapp_escalation", new=AsyncMock()):
 
         # Scenario 1: brand-new conversation -> two saves, neither escalated
         conversation_memory.clear_session(session_id)
@@ -89,6 +92,41 @@ def main() -> int:
         passed &= assert_equal(customer_call.kwargs.get("escalated"), True, "customer message flagged escalated=True")
         bot_call = mock_save.await_args_list[1]
         passed &= assert_equal(bot_call.kwargs.get("escalated", False), False, "bot reply never flagged escalated")
+
+        # Scenario 3: finishing the escalation flow hands the chat to a human in the DB
+        conversation_memory.clear_session(session_id)
+        conversation_memory.add_message(session_id, "user", "שאלה קודמת")
+        conversation_memory.set_escalation_state(session_id, "waiting_problem", {"name": "x", "phone": "y"})
+        mock_pause.reset_mock()
+        client.post("/api/whatsapp/webhook", json=make_payload(sender, sender_name, "הבעיה שלי"))
+        passed &= assert_equal(mock_pause.await_args_list[-1].args[:2] if mock_pause.await_count else None,
+                               (sender, True), "escalation pauses the bot persistently")
+        passed &= assert_equal(mock_pause.await_args_list[-1].kwargs.get("reason") if mock_pause.await_count else None,
+                               "escalation", "pause reason recorded as escalation")
+
+        # Scenario 4: while paused, the bot stays silent but the message is saved
+        mock_state.return_value = {"bot_paused": True, "paused_by": "escalation"}
+        mock_save.reset_mock(); mock_pause.reset_mock()
+        send = whatsapp.whatsapp_service.send_text_message
+        send.reset_mock()
+        response = client.post("/api/whatsapp/webhook", json=make_payload(sender, sender_name, "יש עדכון?"))
+        passed &= assert_equal(response.json().get("bot"), "paused", "paused chat: bot does not reply")
+        passed &= assert_equal((send.await_count, mock_save.await_count), (0, 1),
+                               "paused chat: nothing sent, customer message saved")
+
+        # Scenario 5: the customer can restart an escalated chat themselves
+        send.reset_mock()
+        client.post("/api/whatsapp/webhook", json=make_payload(sender, sender_name, "התחל מחדש"))
+        passed &= assert_equal(mock_pause.await_args_list[-1].args[:2] if mock_pause.await_count else None,
+                               (sender, False), "restart un-pauses an escalated chat")
+        passed &= assert_equal(send.await_count, 1, "restart sends the welcome message")
+
+        # Scenario 6: restart does NOT override a human who took over from the dashboard
+        mock_state.return_value = {"bot_paused": True, "paused_by": "agent"}
+        mock_pause.reset_mock(); send.reset_mock()
+        client.post("/api/whatsapp/webhook", json=make_payload(sender, sender_name, "התחל מחדש"))
+        passed &= assert_equal((mock_pause.await_count, send.await_count), (0, 0),
+                               "restart keeps a human takeover in place")
 
     conversation_memory.clear_session(session_id)
     return 0 if passed else 1

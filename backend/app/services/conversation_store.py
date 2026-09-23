@@ -44,32 +44,20 @@ async def get_last_known_name(phone: str):
         return None
 
 
-async def set_bot_paused(phone: str, paused: bool) -> None:
-    """Pause (human takeover) or resume the bot for one customer."""
-    try:
-        collection = get_collection(STATE_COLLECTION)
-        await collection.update_one(
-            {"_id": phone},
-            {"$set": {"bot_paused": paused, "updated_at": datetime.now(timezone.utc)}},
-            upsert=True,
-        )
-    except Exception as e:
-        print(f"Failed to set bot_paused={paused} for {phone}: {e}")
+async def set_bot_paused(phone: str, paused: bool, reason: str = "agent") -> None:
+    """Pause (human takeover) or resume the bot for one customer.
 
-
-async def is_bot_paused(phone: str) -> bool:
-    """Whether a human has taken this conversation over.
-
-    Fails OPEN (returns False) on any error: a state-store hiccup must never
-    silence the bot for every customer at once.
+    `reason` records who paused it: "agent" (someone replied from the dashboard)
+    or "escalation" (the bot handed the customer to a human).
     """
     try:
         collection = get_collection(STATE_COLLECTION)
-        doc = await collection.find_one({"_id": phone})
-        return bool(doc and doc.get("bot_paused"))
+        fields = {"bot_paused": paused, "updated_at": datetime.now(timezone.utc)}
+        if paused:
+            fields["paused_by"] = reason
+        await collection.update_one({"_id": phone}, {"$set": fields}, upsert=True)
     except Exception as e:
-        print(f"Failed to read bot_paused for {phone}: {e}")
-        return False
+        print(f"Failed to set bot_paused={paused} for {phone}: {e}")
 
 
 async def set_ordered(phone: str, ordered: bool = True) -> None:
@@ -83,6 +71,24 @@ async def set_ordered(phone: str, ordered: bool = True) -> None:
         )
     except Exception as e:
         print(f"Failed to set ordered={ordered} for {phone}: {e}")
+
+
+async def set_handled(phone: str, handled: bool) -> None:
+    """Mark a conversation as handled (the dashboard's check mark), or undo it.
+
+    Handled only hides the chat until the customer writes again: the dashboard
+    compares handled_at with the customer's latest message.
+    """
+    try:
+        collection = get_collection(STATE_COLLECTION)
+        update = (
+            {"$set": {"handled_at": datetime.now(timezone.utc)}}
+            if handled
+            else {"$unset": {"handled_at": ""}}
+        )
+        await collection.update_one({"_id": phone}, update, upsert=True)
+    except Exception as e:
+        print(f"Failed to set handled={handled} for {phone}: {e}")
 
 
 async def get_state(phone: str) -> dict:

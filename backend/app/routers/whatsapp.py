@@ -22,8 +22,7 @@ MAX_MESSAGES_ESCALATION_TEXT = """תודה על השיחה! כנראה שלא ה
 נציג יחזור אליך בהקדם האפשרי!
 תודה על הסבלנות 🙏"""
 
-# Track sessions that have been escalated due to message limit
-escalated_sessions = set()
+RESTART_COMMANDS = ["התחל מחדש", "להתחיל מחדש", "התחלה מחדש"]
 
 # Fixed welcome message for new conversations
 WELCOME_MESSAGE = """היי! אני לאסטי, הנציגה של LUST ✨ איך אני יכולה לעזור לך היום?"""
@@ -85,19 +84,25 @@ async def receive_message(request: Request):
         # Use phone number as session ID for WhatsApp
         session_id = f"whatsapp_{sender}"
 
-        # Human takeover: if an owner is handling this chat from the admin panel,
-        # the bot stays silent. Still persist the incoming message so the owner
-        # sees it live in the dashboard.
-        if await conversation_store.is_bot_paused(sender):
-            await conversation_store.save_message(sender, sender_name, "customer", message_text)
-            print(f"Bot paused for {sender} (human takeover) — not replying")
-            return {"status": "ok", "bot": "paused"}
+        is_restart = message_text.strip() in RESTART_COMMANDS
+
+        # Human takeover: while a human owns this chat (an owner replied from the
+        # admin panel, or the bot escalated it), the bot stays silent. The pause
+        # lives in MongoDB, so it survives restarts and the dashboard can hand
+        # the chat back. Still persist the message so the owner sees it live.
+        # get_state fails open ({}), so a DB hiccup never silences the bot.
+        state = await conversation_store.get_state(sender)
+        if state.get("bot_paused"):
+            if is_restart and state.get("paused_by") == "escalation":
+                # The customer may restart an escalated chat themselves, as before.
+                await conversation_store.set_bot_paused(sender, False)
+            else:
+                await conversation_store.save_message(sender, sender_name, "customer", message_text)
+                print(f"Bot paused for {sender} (human takeover) - not replying")
+                return {"status": "ok", "bot": "paused"}
 
         # Check if user wants to restart conversation
-        if message_text.strip() in ["התחל מחדש", "להתחיל מחדש", "התחלה מחדש"]:
-            # Reset the session - remove from escalated and clear memory
-            if session_id in escalated_sessions:
-                escalated_sessions.remove(session_id)
+        if is_restart:
             conversation_memory.clear_session(session_id)
 
             # Send welcome message
@@ -107,12 +112,6 @@ async def receive_message(request: Request):
             await conversation_store.save_message(sender, sender_name, "customer", message_text)
             await conversation_store.save_message(sender, sender_name, "bot", WELCOME_MESSAGE)
             print(f"Session {session_id} reset by user request")
-            return {"status": "ok"}
-
-        # Check if this session was already escalated due to message limit
-        if session_id in escalated_sessions:
-            # Don't respond - already handed off to human
-            print(f"Session {session_id} already escalated, ignoring message")
             return {"status": "ok"}
 
         # Check if in escalation collection flow
@@ -143,9 +142,9 @@ async def receive_message(request: Request):
             customer_name = escalation_data.get('name', sender_name or 'לא ידוע')
             customer_phone = escalation_data.get('phone', sender)
 
-            # Clear escalation state and mark as escalated
+            # Clear escalation state and hand the chat to a human (bot goes silent)
             conversation_memory.clear_escalation_state(session_id)
-            escalated_sessions.add(session_id)
+            await conversation_store.set_bot_paused(sender, True, reason="escalation")
 
             # Send to human support
             await send_whatsapp_escalation(
@@ -182,8 +181,8 @@ async def receive_message(request: Request):
 
         # Check if max messages reached in 24h (before adding current message)
         if user_message_count_24h >= MAX_MESSAGES_PER_SESSION:
-            # Mark session as escalated
-            escalated_sessions.add(session_id)
+            # Hand the chat to a human (bot goes silent until handed back)
+            await conversation_store.set_bot_paused(sender, True, reason="escalation")
 
             # Send escalation message to customer
             await whatsapp_service.send_text_message(sender, MAX_MESSAGES_ESCALATION_TEXT)

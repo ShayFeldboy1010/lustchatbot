@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from ..config import get_settings
 from ..services.mongodb import get_collection
 from ..services import conversation_store
+from ..services.memory import conversation_memory
 from ..services.whatsapp import whatsapp_service
 
 router = APIRouter(prefix="/admin", tags=["admin-ui"])
@@ -23,8 +24,26 @@ security = HTTPBasic()
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-MAX_CUSTOMERS = 50
+MAX_CUSTOMERS = 500
 MAX_MESSAGES = 200
+
+# Sidebar sections, in display order. Every conversation lands in exactly one.
+# Keep keys + labels in sync with SECTIONS in admin_dashboard.html's script.
+SECTIONS = [
+    ("attention", "דורש תשומת לב"),
+    ("orders", "סגרו הזמנה ב-WhatsApp"),
+    ("card_link", "קיבלו קישור לתשלום באשראי"),
+    ("active", "שיחות פעילות"),
+    ("older", "שיחות קודמות"),
+    ("done", "טופלו ✓"),
+]
+# A bot/agent message containing a product-page link = the customer chose to
+# pay by credit card on the website (the bot's flow ends there).
+CARD_LINK_REGEX = r"https?://\S+/products/"
+# "Active" = any message in this window. Escalations older than ESCALATION_TTL
+# with no agent reply are treated as stale rather than still needing attention.
+ACTIVE_WINDOW = timedelta(hours=48)
+ESCALATION_TTL = timedelta(days=7)
 
 # Stable per-contact avatar colors. The same palette + hash is reproduced in the
 # dashboard's JS so a contact keeps its color across server render and live polls.
@@ -85,6 +104,15 @@ def _window_open(messages) -> bool:
     return (datetime.utcnow() - last_in) < timedelta(hours=24)
 
 
+def _chat_handled(state, messages) -> bool:
+    last_customer_at = max(
+        (m["timestamp"] for m in messages if m.get("role") == "customer" and m.get("timestamp")),
+        key=_naive_utc,
+        default=None,
+    )
+    return _is_handled(state.get("handled_at"), last_customer_at)
+
+
 class SendPayload(BaseModel):
     phone: str
     text: str
@@ -92,6 +120,11 @@ class SendPayload(BaseModel):
 
 class PhonePayload(BaseModel):
     phone: str
+
+
+class HandledPayload(BaseModel):
+    phone: str
+    handled: bool = True
 
 
 def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
@@ -107,11 +140,10 @@ def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) ->
 
 
 async def _get_customers(collection):
-    """Return the conversation list (one row per customer), grouped:
-    escalated ("needs attention") first, then ordered ("reservations"), then
-    everything else — each group sorted by most recent activity.
+    """Return the conversation list (one row per customer), newest activity first.
 
-    Each row is annotated with its control state (ordered) from conversation_state.
+    Each row is annotated with its control state (ordered / bot_paused) from
+    conversation_state and with its sidebar `section` (see _classify).
     """
     pipeline = [
         {"$sort": {"timestamp": 1}},
@@ -119,36 +151,113 @@ async def _get_customers(collection):
             "_id": "$phone",
             "name": {"$last": "$name"},
             "last_message": {"$last": "$content"},
+            "last_role": {"$last": "$role"},
             "last_timestamp": {"$last": "$timestamp"},
-            "escalated": {"$max": "$escalated"},
+            # $max skips nulls, so these are "latest escalated / agent message".
+            "last_escalated_at": {"$max": {"$cond": [{"$eq": ["$escalated", True]}, "$timestamp", None]}},
+            "last_agent_at": {"$max": {"$cond": [{"$eq": ["$role", "agent"]}, "$timestamp", None]}},
+            "last_customer_at": {"$max": {"$cond": [{"$eq": ["$role", "customer"]}, "$timestamp", None]}},
+            "last_card_link_at": {"$max": {"$cond": [
+                {"$and": [
+                    {"$in": ["$role", ["bot", "agent"]]},
+                    {"$regexMatch": {"input": {"$ifNull": ["$content", ""]}, "regex": CARD_LINK_REGEX}},
+                ]},
+                "$timestamp",
+                None,
+            ]}},
         }},
-        {"$sort": {"escalated": -1, "last_timestamp": -1}},
+        # Sort and cap by recency only. Never sort by a flag before $limit, or one
+        # busy group can push every other conversation out of the list.
+        {"$sort": {"last_timestamp": -1}},
         {"$limit": MAX_CUSTOMERS},
     ]
     customers = await collection.aggregate(pipeline).to_list(length=MAX_CUSTOMERS)
     states = await conversation_store.get_states([c["_id"] for c in customers])
+    now = datetime.utcnow()
     for c in customers:
-        c["ordered"] = bool(states.get(c["_id"], {}).get("ordered"))
-
-    def sort_key(c):
-        ts = c.get("last_timestamp")
-        ts_value = ts.timestamp() if ts else 0
-        return (
-            0 if c.get("escalated") else 1,
-            0 if c.get("ordered") else 1,
-            -ts_value,
-        )
-
-    customers.sort(key=sort_key)
+        state = states.get(c["_id"], {})
+        c["ordered"] = bool(state.get("ordered"))
+        c["bot_paused"] = bool(state.get("bot_paused"))
+        c["handled_at"] = state.get("handled_at")
+        c["section"] = _classify(c, now)
     return customers
 
 
+def _naive_utc(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _needs_attention(c, now) -> bool:
+    """A human should look at this chat now.
+
+    - Open escalation: the bot escalated, and no agent has replied since, within
+      ESCALATION_TTL (older ones are stale, not actionable).
+    - Waiting on a human: the bot is paused (human takeover) and the customer's
+      message is the last one, while WhatsApp still lets us reply (24h).
+    """
+    escalated_at = _naive_utc(c.get("last_escalated_at"))
+    agent_at = _naive_utc(c.get("last_agent_at"))
+    if escalated_at and (agent_at is None or agent_at < escalated_at):
+        if now - escalated_at < ESCALATION_TTL:
+            return True
+    last_at = _naive_utc(c.get("last_timestamp"))
+    if c.get("bot_paused") and c.get("last_role") == "customer" and last_at:
+        if now - last_at < timedelta(hours=24):
+            return True
+    return False
+
+
+def _is_handled(handled_at, last_customer_at) -> bool:
+    """Marked handled, and the customer hasn't written since."""
+    handled_at = _naive_utc(handled_at)
+    if not handled_at:
+        return False
+    last_customer_at = _naive_utc(last_customer_at)
+    return last_customer_at is None or handled_at >= last_customer_at
+
+
+def _classify(c, now) -> str:
+    """Pick the one sidebar section a conversation belongs to (first match wins)."""
+    if _is_handled(c.get("handled_at"), c.get("last_customer_at")):
+        return "done"
+    if _needs_attention(c, now):
+        return "attention"
+    if c.get("ordered"):
+        return "orders"
+    if c.get("last_card_link_at"):
+        return "card_link"
+    last_at = _naive_utc(c.get("last_timestamp"))
+    if last_at and now - last_at < ACTIVE_WINDOW:
+        return "active"
+    return "older"
+
+
 def _group_customers(customers):
-    """Split an already-sorted customer list into the three sidebar sections."""
-    escalated = [c for c in customers if c.get("escalated")]
-    reservations = [c for c in customers if not c.get("escalated") and c.get("ordered")]
-    others = [c for c in customers if not c.get("escalated") and not c.get("ordered")]
-    return escalated, reservations, others
+    """Split an already-sorted customer list into {section_key: [rows]}."""
+    groups = {key: [] for key, _ in SECTIONS}
+    for c in customers:
+        groups[c["section"]].append(c)
+    return groups
+
+
+def _dashboard_context(customers, error, **chat):
+    groups = _group_customers(customers)
+    return {
+        "customers": customers,
+        "sections": [(key, label, groups[key]) for key, label in SECTIONS],
+        "messages": chat.get("messages", []),
+        "selected_phone": chat.get("selected_phone"),
+        "selected_name": chat.get("selected_name"),
+        "bot_paused": chat.get("bot_paused", False),
+        "ordered": chat.get("ordered", False),
+        "handled": chat.get("handled", False),
+        "window_open": chat.get("window_open", False),
+        "error": error,
+    }
 
 
 @router.get("", response_class=HTMLResponse)
@@ -161,24 +270,8 @@ async def list_conversations(request: Request, _: None = Depends(require_admin_a
         customers = []
         error = str(e)
 
-    escalated_customers, reservation_customers, other_customers = _group_customers(customers)
-
     return templates.TemplateResponse(
-        request,
-        "admin_dashboard.html",
-        {
-            "customers": customers,
-            "escalated_customers": escalated_customers,
-            "reservation_customers": reservation_customers,
-            "other_customers": other_customers,
-            "messages": [],
-            "selected_phone": None,
-            "selected_name": None,
-            "bot_paused": False,
-            "ordered": False,
-            "window_open": False,
-            "error": error,
-        },
+        request, "admin_dashboard.html", _dashboard_context(customers, error)
     )
 
 
@@ -206,24 +299,20 @@ async def view_chat(phone: str, request: Request, _: None = Depends(require_admi
         selected_name = next((c.get("name") for c in customers if c["_id"] == phone), None)
 
     state = await conversation_store.get_state(phone)
-    escalated_customers, reservation_customers, other_customers = _group_customers(customers)
-
     return templates.TemplateResponse(
         request,
         "admin_dashboard.html",
-        {
-            "customers": customers,
-            "escalated_customers": escalated_customers,
-            "reservation_customers": reservation_customers,
-            "other_customers": other_customers,
-            "messages": messages,
-            "selected_phone": phone,
-            "selected_name": selected_name,
-            "bot_paused": bool(state.get("bot_paused")),
-            "ordered": bool(state.get("ordered")),
-            "window_open": _window_open(messages),
-            "error": error,
-        },
+        _dashboard_context(
+            customers,
+            error,
+            messages=messages,
+            selected_phone=phone,
+            selected_name=selected_name,
+            bot_paused=bool(state.get("bot_paused")),
+            ordered=bool(state.get("ordered")),
+            handled=_chat_handled(state, messages),
+            window_open=_window_open(messages),
+        ),
     )
 
 
@@ -244,8 +333,10 @@ async def api_conversations(_: None = Depends(require_admin_auth)):
                 "phone": c["_id"],
                 "name": c.get("name") or "",
                 "last_message": c.get("last_message") or "",
-                "escalated": bool(c.get("escalated")),
+                "section": c["section"],
                 "ordered": bool(c.get("ordered")),
+                "bot_paused": bool(c.get("bot_paused")),
+                "card_link": bool(c.get("last_card_link_at")),
                 "time_label": _time_label(c.get("last_timestamp")),
             }
             for c in customers
@@ -275,6 +366,7 @@ async def api_messages(phone: str, _: None = Depends(require_admin_auth)):
         ],
         "bot_paused": bool(state.get("bot_paused")),
         "ordered": bool(state.get("ordered")),
+        "handled": _chat_handled(state, messages),
         "window_open": _window_open(messages),
     }
 
@@ -317,4 +409,17 @@ async def api_resume(payload: PhonePayload, _: None = Depends(require_admin_auth
     if not phone:
         return JSONResponse({"ok": False, "error": "missing phone"}, status_code=400)
     await conversation_store.set_bot_paused(phone, False)
+    # Give the bot a fresh 24h message budget, or a chat escalated for hitting
+    # the limit would re-escalate on the customer's very next message.
+    conversation_memory.reset_message_limit(f"whatsapp_{phone}")
     return {"ok": True, "bot_paused": False}
+
+
+@router.post("/api/handled")
+async def api_handled(payload: HandledPayload, _: None = Depends(require_admin_auth)):
+    """Mark a chat handled (moves it to "done" until the customer writes again), or undo."""
+    phone = (payload.phone or "").strip()
+    if not phone:
+        return JSONResponse({"ok": False, "error": "missing phone"}, status_code=400)
+    await conversation_store.set_handled(phone, payload.handled)
+    return {"ok": True, "handled": payload.handled}

@@ -53,7 +53,8 @@ class FakeCollection:
         self._docs = docs
 
     def aggregate(self, pipeline):
-        return FakeCursor(self._docs)
+        # Aggregation output = one row per customer (docs keyed by _id).
+        return FakeCursor([d for d in self._docs if "_id" in d])
 
     def find(self, query):
         return FakeCursor([d for d in self._docs if d.get("phone") == query.get("phone")])
@@ -75,7 +76,8 @@ def main() -> int:
         "name": "בדיקה",
         "last_message": "<script>alert(1)</script>",
         "last_timestamp": datetime.now(timezone.utc),
-        "escalated": True,
+        "last_role": "bot",
+        "last_escalated_at": datetime.now(timezone.utc),
     }, {
         "phone": "972500000001",
         "role": "customer",
@@ -90,7 +92,8 @@ def main() -> int:
         passed &= assert_equal(response.status_code, 200, "correct password accepted")
         passed &= assert_equal("&lt;script&gt;" in response.text, True, "message content HTML-escaped")
         passed &= assert_equal("<script>alert(1)</script>" in response.text, False, "raw script tag not present")
-        passed &= assert_equal("דורש תשומת לב" in response.text, True, "escalated badge rendered")
+        passed &= assert_equal('<span class="badge">דורש תשומת לב</span>' in response.text, True, "escalated badge rendered")
+        passed &= assert_equal('data-section="attention"' in response.text, True, "attention section rendered")
 
         # Thread view also requires auth
         response = client.get("/admin/chat/972500000001")
@@ -101,7 +104,58 @@ def main() -> int:
         passed &= assert_equal("&lt;script&gt;alert(2)&lt;/script&gt;" in response.text, True, "chat thread content HTML-escaped")
         passed &= assert_equal("<script>alert(2)</script>" in response.text, False, "raw script tag not present in chat thread")
 
+    passed &= test_classify()
     return 0 if passed else 1
+
+
+def test_classify() -> bool:
+    from datetime import timedelta
+    from app.routers.admin_ui import _classify, _group_customers
+
+    now = datetime.utcnow()
+    hour = timedelta(hours=1)
+    passed = True
+
+    def row(**kw):
+        base = {"_id": "1", "last_timestamp": now - hour, "last_role": "bot",
+                "ordered": False, "bot_paused": False}
+        base.update(kw)
+        return base
+
+    passed &= assert_equal(_classify(row(last_escalated_at=now - hour), now), "attention",
+                           "open escalation needs attention")
+    passed &= assert_equal(_classify(row(last_escalated_at=now - 2 * hour, last_agent_at=now - hour), now),
+                           "active", "agent reply clears escalation")
+    passed &= assert_equal(_classify(row(last_escalated_at=now - timedelta(days=30),
+                                         last_timestamp=now - timedelta(days=30)), now),
+                           "older", "stale escalation is not attention")
+    passed &= assert_equal(_classify(row(bot_paused=True, last_role="customer"), now), "attention",
+                           "paused chat with unanswered customer needs attention")
+    passed &= assert_equal(_classify(row(ordered=True, last_timestamp=now - timedelta(days=20)), now),
+                           "orders", "ordered customer lands in orders")
+    passed &= assert_equal(_classify(row(), now), "active", "recent chat is active")
+    passed &= assert_equal(_classify(row(last_timestamp=now - timedelta(days=5)), now), "older",
+                           "old chat is older")
+
+    passed &= assert_equal(_classify(row(last_card_link_at=now - hour, last_timestamp=now - timedelta(days=5)), now),
+                           "card_link", "customer who got a card link lands in card_link")
+    passed &= assert_equal(_classify(row(ordered=True, last_card_link_at=now - hour), now), "orders",
+                           "an order beats a card link")
+    passed &= assert_equal(_classify(row(last_escalated_at=now - 2 * hour, last_customer_at=now - 2 * hour,
+                                         handled_at=now - hour), now),
+                           "done", "handled chat moves to done, even over an open escalation")
+    passed &= assert_equal(_classify(row(last_customer_at=now - hour, handled_at=now - 2 * hour), now),
+                           "active", "customer writing after handled brings the chat back")
+
+    # Regression: many escalated customers must not hide everything else.
+    rows = [row(_id=str(i), last_escalated_at=now - hour) for i in range(60)]
+    rows += [row(_id="o", ordered=True), row(_id="a")]
+    for r in rows:
+        r["section"] = _classify(r, now)
+    groups = _group_customers(rows)
+    passed &= assert_equal((len(groups["attention"]), len(groups["orders"]), len(groups["active"])),
+                           (60, 1, 1), "orders and active chats survive a flood of escalations")
+    return passed
 
 
 if __name__ == "__main__":
